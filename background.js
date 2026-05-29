@@ -34,7 +34,15 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 function getDateKey(isoTimestamp) {
-  return isoTimestamp.slice(0, 10);
+  const d = new Date(isoTimestamp);
+
+  // Extract local year, month, and day
+  const y = d.getFullYear();
+  // Months are 0-indexed in JS, so we add 1. padStart ensures "5" becomes "05"
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+
+  return `${y}-${m}-${day}`;
 }
 
 function getDomain(url) {
