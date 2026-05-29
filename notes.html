@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-layout="double">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Saved Notes</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=JetBrains+Mono:wght@400;500&family=Lato:wght@300;400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         THEME TOKENS — light (default) and dark
+      ═══════════════════════════════════════════════════════════ */
+      :root,
+      [data-theme="light"] {
+        --bg: #f4f1ea;
+        --bg2: #eceae0;
+        --surface: #ffffff;
+        --surface2: #f7f5f0;
+        --rule: #d9d5c8;
+        --text: #2c2c3e;
+        --text-muted: #7a7a9a;
+        --ink: #1a1a2e;
+        --topbar-bg: #1a1a2e;
+        --topbar-text: #e8e8f0;
+        --topbar-muted: #888aaa;
+        --topbar-border: #2a2a4a;
+        --accent: #c0392b;
+        --accent2: #8e44ad;
+        --gold: #c8963c;
+        --link: #2471a3;
+        --quote-bg: #ede9e0;
+        --quote-bar: #c0392b;
+        --stripe: rgba(180, 170, 150, 0.08);
+        --shadow: rgba(0, 0, 0, 0.09);
+        --card-hover-border: #c8c0b4;
+        --delete-color: #d9d5c8;
+        --radius: 6px;
+        /* toggle switch */
+        --toggle-bg: #d9d5c8;
+        --toggle-knob: #ffffff;
+        --toggle-on: #8e44ad;
+      }
+
+      [data-theme="dark"] {
+        --bg: #0f0f1a;
+        --bg2: #16162a;
+        --surface: #1c1c32;
+        --surface2: #222240;
+        --rule: #2e2e50;
+        --text: #dcdcf0;
+        --text-muted: #6868a0;
+        --ink: #e8e8ff;
+        --topbar-bg: #08080f;
+        --topbar-text: #e8e8f0;
+        --topbar-muted: #555580;
+        --topbar-border: #1e1e38;
+        --accent: #e05555;
+        --accent2: #a070e0;
+        --gold: #d4a040;
+        --link: #60a8d0;
+        --quote-bg: #181830;
+        --quote-bar: #e05555;
+        --stripe: rgba(255, 255, 255, 0.015);
+        --shadow: rgba(0, 0, 0, 0.4);
+        --card-hover-border: #404070;
+        --delete-color: #2e2e50;
+        --toggle-bg: #2e2e50;
+        --toggle-knob: #ffffff;
+        --toggle-on: #a070e0;
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         BASE
+      ═══════════════════════════════════════════════════════════ */
+      html {
+        font-size: 16px;
+        scroll-behavior: smooth;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Lato", sans-serif;
+        font-weight: 300;
+        min-height: 100vh;
+        transition:
+          background 0.25s,
+          color 0.25s;
+        background-image: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 27px,
+          var(--stripe) 27px,
+          var(--stripe) 28px
+        );
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         TOP BAR
+      ═══════════════════════════════════════════════════════════ */
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 200;
+        background: var(--topbar-bg);
+        color: var(--topbar-text);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 28px;
+        height: 54px;
+        box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+        border-bottom: 1px solid var(--topbar-border);
+        transition: background 0.25s;
+      }
+
+      .topbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-family: "Playfair Display", serif;
+        font-size: 19px;
+        font-weight: 700;
+        color: #fff;
+        white-space: nowrap;
+      }
+      .brand-dot {
+        width: 8px;
+        height: 8px;
+        background: var(--accent);
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .storage-indicator {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        color: var(--topbar-muted);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--topbar-border);
+        border-radius: 20px;
+        padding: 2px 10px;
+        white-space: nowrap;
+      }
+      .storage-indicator.warn {
+        color: var(--gold);
+        border-color: var(--gold);
+      }
+      .storage-indicator.alert {
+        color: #f76a6a;
+        border-color: #f76a6a;
+      }
+
+      .topbar-stats {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        color: var(--topbar-muted);
+      }
+
+      .topbar-controls {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: nowrap;
+      }
+
+      /* ── icon button wrapper (for layout + theme toggles) ── */
+      .ctrl-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--topbar-border);
+        border-radius: 8px;
+        padding: 4px 8px;
+      }
+      .ctrl-label {
+        font-size: 11px;
+        color: var(--topbar-muted);
+        font-family: "JetBrains Mono", monospace;
+        white-space: nowrap;
+      }
+
+      /* ── Toggle switch ── */
+      .toggle-wrap {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .toggle-switch {
+        position: relative;
+        width: 36px;
+        height: 20px;
+        cursor: pointer;
+      }
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+      }
+      .toggle-track {
+        position: absolute;
+        inset: 0;
+        background: var(--toggle-bg);
+        border-radius: 20px;
+        transition: background 0.2s;
+      }
+      .toggle-switch input:checked + .toggle-track {
+        background: var(--toggle-on);
+      }
+      .toggle-knob {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 14px;
+        height: 14px;
+        background: var(--toggle-knob);
+        border-radius: 50%;
+        transition: transform 0.2s;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      }
+      .toggle-switch input:checked ~ .toggle-knob {
+        transform: translateX(16px);
+      }
+
+      /* ── Action buttons ── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: var(--radius);
+        border: none;
+        font-family: "Lato", sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          opacity 0.15s,
+          transform 0.1s;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+      }
+      .btn:hover {
+        opacity: 0.85;
+      }
+      .btn:active {
+        transform: scale(0.97);
+      }
+      .btn-export {
+        background: var(--gold);
+        color: #fff;
+      }
+      .btn-clear {
+        background: transparent;
+        color: var(--topbar-muted);
+        border: 1px solid var(--topbar-border);
+      }
+      .btn-clear:hover {
+        color: #f76a6a;
+        border-color: #f76a6a;
+        opacity: 1;
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         TOOLBAR (search + page info)
+      ═══════════════════════════════════════════════════════════ */
+      .toolbar {
+        max-width: 1400px;
+        margin: 28px auto 0;
+        padding: 0 28px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .search-input {
+        flex: 1;
+        min-width: 200px;
+        padding: 10px 18px;
+        border: 1.5px solid var(--rule);
+        border-radius: 30px;
+        background: var(--surface);
+        font-family: "Lato", sans-serif;
+        font-size: 14px;
+        color: var(--text);
+        outline: none;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s,
+          background 0.25s;
+      }
+      .search-input::placeholder {
+        color: var(--text-muted);
+      }
+      .search-input:focus {
+        border-color: var(--accent2);
+        box-shadow: 0 0 0 3px rgba(142, 68, 173, 0.12);
+      }
+
+      .page-info {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        color: var(--text-muted);
+        white-space: nowrap;
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         MAIN LAYOUT  —  double vs single
+      ═══════════════════════════════════════════════════════════ */
+      .page-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 28px 28px 80px;
+      }
+
+      /* Double-page: two columns side by side */
+      [data-layout="double"] .pages-wrap {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 32px var(--shadow);
+      }
+
+      [data-layout="double"] .page-col {
+        padding: 32px 28px;
+        background: var(--surface);
+        min-height: 600px;
+      }
+
+      /* Spine between pages */
+      [data-layout="double"] .page-col:first-child {
+        border-right: 2px solid var(--rule);
+        position: relative;
+      }
+      [data-layout="double"] .page-col:first-child::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: -6px;
+        bottom: 0;
+        width: 10px;
+        background: linear-gradient(
+          to right,
+          rgba(0, 0, 0, 0.04) 0%,
+          transparent 100%
+        );
+        pointer-events: none;
+      }
+
+      /* Single-page */
+      [data-layout="single"] .pages-wrap {
+        display: block;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 32px var(--shadow);
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      [data-layout="single"] .page-col {
+        padding: 32px 36px;
+        background: var(--surface);
+      }
+      [data-layout="single"] .page-col.right-col {
+        display: none;
+      }
+
+      /* page-col transition */
+      .page-col {
+        transition: background 0.25s;
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         EMPTY STATE
+      ═══════════════════════════════════════════════════════════ */
+      .empty-state {
+        text-align: center;
+        padding: 80px 40px;
+        color: var(--text-muted);
+        grid-column: 1 / -1;
+      }
+      .empty-state .big-icon {
+        font-size: 52px;
+        margin-bottom: 18px;
+        opacity: 0.4;
+      }
+      .empty-state h2 {
+        font-family: "Playfair Display", serif;
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--ink);
+        margin-bottom: 10px;
+      }
+      .empty-state p {
+        font-size: 14px;
+        line-height: 1.7;
+      }
+      .empty-state kbd {
+        background: var(--bg2);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: 1px 7px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        color: var(--text);
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         DATE BLOCK
+      ═══════════════════════════════════════════════════════════ */
+      .date-block {
+        margin-bottom: 40px;
+        animation: fadeUp 0.3s ease both;
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .date-heading {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+      .date-label {
+        font-family: "Playfair Display", serif;
+        font-size: 20px;
+        font-weight: 900;
+        color: var(--ink);
+        letter-spacing: -0.4px;
+      }
+      .date-rule {
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(to right, var(--rule), transparent);
+      }
+      .date-count {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        color: var(--text-muted);
+        background: var(--bg2);
+        border: 1px solid var(--rule);
+        border-radius: 20px;
+        padding: 2px 10px;
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         DOMAIN BLOCK
+      ═══════════════════════════════════════════════════════════ */
+      .domain-block {
+        margin-bottom: 24px;
+        border-left: 3px solid var(--accent2);
+        padding-left: 18px;
+      }
+      .domain-heading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .domain-favicon {
+        width: 15px;
+        height: 15px;
+        border-radius: 3px;
+        flex-shrink: 0;
+      }
+      .domain-name {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--accent2);
+      }
+      .domain-note-count {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         NOTE CARD
+      ═══════════════════════════════════════════════════════════ */
+      .note-card {
+        background: var(--surface2);
+        border: 1px solid var(--rule);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+        margin-bottom: 10px;
+        position: relative;
+        transition:
+          box-shadow 0.2s,
+          border-color 0.2s,
+          background 0.25s;
+      }
+      .note-card:hover {
+        box-shadow: 0 4px 18px var(--shadow);
+        border-color: var(--card-hover-border);
+      }
+      .note-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      .note-index {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        font-weight: 500;
+        color: #fff;
+        background: var(--accent);
+        border-radius: 3px;
+        padding: 1px 7px;
+      }
+      .note-time {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+      .note-source-link {
+        font-size: 12px;
+        color: var(--link);
+        text-decoration: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 320px;
+        display: inline-block;
+        vertical-align: middle;
+      }
+      .note-source-link:hover {
+        text-decoration: underline;
+      }
+      .note-body {
+        border-left: 3px solid var(--quote-bar);
+        background: var(--quote-bg);
+        border-radius: 0 4px 4px 0;
+        padding: 10px 13px;
+        margin-top: 9px;
+        transition: background 0.25s;
+      }
+      .note-body p {
+        font-size: 13px;
+        line-height: 1.7;
+        color: var(--text);
+        font-weight: 400;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .note-delete {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--delete-color);
+        font-size: 15px;
+        line-height: 1;
+        padding: 3px 6px;
+        border-radius: 4px;
+        opacity: 0;
+        transition:
+          opacity 0.15s,
+          color 0.15s;
+      }
+      .note-card:hover .note-delete {
+        opacity: 1;
+      }
+      .note-delete:hover {
+        color: var(--accent);
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         PAGINATION
+      ═══════════════════════════════════════════════════════════ */
+      .pagination {
+        position: fixed;
+        bottom: 28px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 8px 12px;
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 40px;
+        box-shadow: 0 8px 32px var(--shadow);
+        backdrop-filter: blur(
+          10px
+        ); /* Gives a nice frosted glass effect if content scrolls behind */
+        z-index: 100;
+      }
+
+      .pg-btn {
+        min-width: 36px;
+        height: 36px;
+        padding: 0 12px;
+        border-radius: 20px; /* Matches the rounded container */
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .pg-btn:hover:not(:disabled) {
+        border-color: var(--accent2);
+        color: var(--accent2);
+      }
+      /* Hover state for interactive buttons */
+      .pg-btn:hover:not(:disabled):not(.active) {
+        background: var(--surface2);
+        color: var(--accent2);
+      }
+
+      /* Active page indicator */
+      .pg-btn.active {
+        background: var(--accent2);
+        color: #fff;
+        font-weight: 700;
+        box-shadow: 0 2px 10px rgba(142, 68, 173, 0.25); /* Subtle glow matching your accent color */
+      }
+
+      /* Disabled state (e.g., the back arrow on page 1) */
+      .pg-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+
+      .pg-ellipsis {
+        color: var(--text-muted);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        padding: 0 8px;
+        user-select: none;
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         TOAST
+      ═══════════════════════════════════════════════════════════ */
+      #toast {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        background: var(--topbar-bg);
+        color: var(--topbar-text);
+        padding: 11px 18px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-family: "Lato", sans-serif;
+        font-weight: 700;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+        border-left: 4px solid var(--gold);
+        opacity: 0;
+        transform: translateY(12px);
+        transition:
+          opacity 0.25s,
+          transform 0.25s;
+        pointer-events: none;
+        z-index: 9999;
+      }
+      #toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         SCROLLBAR
+      ═══════════════════════════════════════════════════════════ */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--rule);
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ── Top bar ─────────────────────────────────────────── -->
+    <div class="topbar">
+      <div class="topbar-brand">
+        <div class="brand-dot"></div>
+        My Saved Notes
+      </div>
+      <span class="topbar-stats" id="topbarStats"></span>
+      <span
+        class="storage-indicator"
+        id="storageIndicator"
+        title="Storage used by your notes"
+      ></span>
+
+      <div class="topbar-controls">
+        <!-- Dark mode toggle -->
+        <div class="ctrl-group">
+          <span class="ctrl-label" id="themeLabel">☀️</span>
+          <label class="toggle-switch" title="Toggle dark mode">
+            <input type="checkbox" id="themeToggle" />
+            <div class="toggle-track"></div>
+            <div class="toggle-knob"></div>
+          </label>
+          <span class="ctrl-label">🌙</span>
+        </div>
+
+        <!-- Layout toggle -->
+        <div class="ctrl-group">
+          <span class="ctrl-label">▤</span>
+          <label class="toggle-switch" title="Toggle double / single page">
+            <input type="checkbox" id="layoutToggle" />
+            <div class="toggle-track"></div>
+            <div class="toggle-knob"></div>
+          </label>
+          <span class="ctrl-label">▥</span>
+        </div>
+
+        <button class="btn btn-export" id="exportBtn">⬇ Export .md</button>
+        <button class="btn btn-clear" id="clearBtn">✕ Clear All</button>
+      </div>
+    </div>
+
+    <!-- ── Search + page info ────────────────────────────── -->
+    <div class="toolbar">
+      <input
+        class="search-input"
+        id="searchInput"
+        type="text"
+        placeholder="Search notes, sources, or domains…"
+      />
+      <span class="page-info" id="pageInfo"></span>
+    </div>
+
+    <!-- ── Notes pages ───────────────────────────────────── -->
+    <div class="page-container">
+      <div class="pages-wrap" id="pagesWrap">
+        <div class="page-col left-col" id="leftCol"></div>
+        <div class="page-col right-col" id="rightCol"></div>
+      </div>
+    </div>
+
+    <!-- ── Pagination ────────────────────────────────────── -->
+    <div class="pagination" id="pagination"></div>
+
+    <div id="toast"></div>
+    <script src="notes.js"></script>
+  </body>
+</html>
