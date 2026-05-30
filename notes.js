@@ -110,7 +110,10 @@ function groupNotes(notes) {
       dateKey: dk,
       domains: Object.keys(map[dk]).map((d) => ({
         domain: d,
-        notes: map[dk][d],
+        // Sorts the individual notes chronologically (oldest first) within the domain
+        notes: map[dk][d].sort(
+          (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+        ),
       })),
     }));
 }
@@ -124,6 +127,12 @@ function noteCardHTML(note, idx) {
   return `
   <div class="note-card" data-id="${note.id}">
     <button class="note-delete" data-id="${note.id}" title="Delete">✕</button>
+    <button class="note-copy" data-id="${note.id}" title="Copy note text" aria-label="Copy">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+    </button>
     <div class="note-meta-row">
       <span class="note-index">Note ${idx + 1}</span>
       <span class="note-time">${formatTime(note.timestamp)}</span>
@@ -248,6 +257,26 @@ function render(filtered) {
         loadNotes();
         showToast("🗑 Note deleted");
       });
+    });
+  });
+
+  document.querySelectorAll(".note-copy").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      // Find the specific note by its ID
+      const id = parseInt(btn.dataset.id);
+      const noteToCopy = allNotes.find((n) => n.id === id);
+
+      if (noteToCopy) {
+        // Use the browser's Clipboard API to copy the pure text
+        navigator.clipboard
+          .writeText(noteToCopy.text)
+          .then(() => {
+            showToast("📋 Copied to clipboard!");
+          })
+          .catch((err) => {
+            showToast("❌ Failed to copy");
+          });
+      }
     });
   });
 
