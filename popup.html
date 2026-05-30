@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Save to Notes</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&family=DM+Sans:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0e0e11;
+        --surface: #17171c;
+        --surface2: #1e1e26;
+        --border: rgba(255, 255, 255, 0.07);
+        --border-hover: rgba(255, 255, 255, 0.15);
+        --text: #e8e8f0;
+        --muted: #6b6b80;
+        --accent: #c8b8ff;
+        --accent-dim: rgba(200, 184, 255, 0.12);
+        --accent-border: rgba(200, 184, 255, 0.3);
+        --red: #ff6b6b;
+        --red-dim: rgba(255, 107, 107, 0.12);
+        --green: #6bffc0;
+      }
+
+      [data-theme="light"] {
+        --bg: #f5f4f8;
+        --surface: #ffffff;
+        --surface2: #f0eff5;
+        --border: rgba(0, 0, 0, 0.07);
+        --border-hover: rgba(0, 0, 0, 0.15);
+        --text: #1a1a2e;
+        --muted: #8888a0;
+        --accent: #6c50e8;
+        --accent-dim: rgba(108, 80, 232, 0.08);
+        --accent-border: rgba(108, 80, 232, 0.25);
+        --red: #e03c3c;
+        --red-dim: rgba(224, 60, 60, 0.1);
+        --green: #1a9e6b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        width: 600px;
+        margin: 0;
+        font-family: "DM Sans", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        min-height: 560px;
+      }
+
+      /* ── Header ── */
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 18px 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+      }
+
+      .header-left {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+
+      .app-name {
+        font-family: "Fraunces", serif;
+        font-size: 18px;
+        font-weight: 500;
+        letter-spacing: -0.3px;
+        margin: 0;
+        line-height: 1;
+      }
+
+      .app-name em {
+        font-style: italic;
+        color: var(--accent);
+      }
+
+      .note-pill {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        font-weight: 500;
+        background: var(--accent-dim);
+        color: var(--accent);
+        border: 1px solid var(--accent-border);
+        border-radius: 20px;
+        padding: 2px 8px;
+        letter-spacing: 0.3px;
+        transition: opacity 0.2s;
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .icon-btn {
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+        font-size: 14px;
+        padding: 0;
+      }
+
+      .icon-btn:hover {
+        border-color: var(--border-hover);
+        color: var(--text);
+        background: var(--surface2);
+      }
+
+      .btn-full {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        padding: 5px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+
+      .btn-full:hover {
+        border-color: var(--accent-border);
+        color: var(--accent);
+        background: var(--accent-dim);
+      }
+
+      /* ── Search ── */
+      .search-wrap {
+        padding: 10px 16px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        position: relative;
+      }
+
+      .search-icon {
+        position: absolute;
+        left: 28px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--muted);
+        font-size: 13px;
+        pointer-events: none;
+      }
+
+      input[type="text"] {
+        width: 100%;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-family: "DM Sans", sans-serif;
+        font-size: 13px;
+        padding: 7px 12px 7px 32px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+
+      input[type="text"]::placeholder {
+        color: var(--muted);
+      }
+      input[type="text"]:focus {
+        border-color: var(--accent-border);
+      }
+
+      /* ── Notes List ── */
+      .notes-list {
+        padding: 10px 14px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 380px;
+        max-height: 420px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+
+      /* ── Date Group ── */
+      .date-group {
+        margin-bottom: 6px;
+      }
+
+      .date-heading {
+        font-family: "DM Mono", monospace;
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 14px 0 8px 2px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .date-heading::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      /* ── Domain Row ── */
+      .domain-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 10px 0 6px;
+      }
+
+      .domain-favicon {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        opacity: 0.8;
+      }
+
+      .domain-label {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.3px;
+      }
+
+      /* ── Note Card ── */
+      .note-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 11px 13px;
+        margin-bottom: 7px;
+        position: relative;
+        transition:
+          border-color 0.2s,
+          background 0.2s;
+        overflow: hidden;
+      }
+
+      .note-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--accent);
+        opacity: 0;
+        transition: opacity 0.2s;
+        border-radius: 10px 0 0 10px;
+      }
+
+      .note-card:hover {
+        border-color: var(--border-hover);
+        background: var(--surface2);
+      }
+
+      .note-card:hover::before {
+        opacity: 1;
+      }
+
+      .note-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 7px;
+      }
+
+      .note-time {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.3px;
+      }
+
+      .note-source {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        color: var(--accent);
+        text-decoration: none;
+        letter-spacing: 0.3px;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+
+      .note-card:hover .note-source {
+        opacity: 1;
+      }
+
+      .note-body {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--text);
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      /* ── Card Action Buttons ── */
+      .note-actions {
+        position: absolute;
+        bottom: 9px;
+        right: 9px;
+        display: flex;
+        gap: 4px;
+        opacity: 0;
+        transform: translateY(4px);
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+      }
+
+      .note-card:hover .note-actions {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .card-btn {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--muted);
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        transition: all 0.15s;
+        padding: 0;
+      }
+
+      .card-btn:hover {
+        background: var(--accent-dim);
+        border-color: var(--accent-border);
+        color: var(--accent);
+      }
+
+      .card-btn.del:hover {
+        background: var(--red-dim);
+        border-color: rgba(255, 107, 107, 0.3);
+        color: var(--red);
+      }
+
+      /* ── Empty State ── */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        gap: 10px;
+        color: var(--muted);
+      }
+
+      .empty-icon {
+        font-size: 28px;
+        opacity: 0.4;
+      }
+
+      .empty-text {
+        font-family: "Fraunces", serif;
+        font-style: italic;
+        font-size: 15px;
+        opacity: 0.6;
+      }
+
+      /* ── Pagination ── */
+      .pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 8px 16px;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+      }
+
+      .pg-btn {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        padding: 5px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+
+      .pg-btn:hover:not(:disabled) {
+        border-color: var(--border-hover);
+        color: var(--text);
+      }
+
+      .pg-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+
+      .pg-info {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.3px;
+      }
+
+      /* ── Footer ── */
+      .footer {
+        padding: 7px 16px;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .footer-stat {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.3px;
+      }
+
+      .storage-bar-wrap {
+        width: 60px;
+        height: 3px;
+        background: var(--surface2);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .storage-bar {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 2px;
+        width: 0%;
+        transition: width 0.4s ease;
+      }
+
+      /* ── Toast ── */
+      #toast {
+        position: fixed;
+        bottom: 36px;
+        left: 50%;
+        transform: translateX(-50%) translateY(10px);
+        background: var(--text);
+        color: var(--bg);
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.3px;
+        padding: 7px 16px;
+        border-radius: 20px;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.25s ease;
+        z-index: 100;
+        white-space: nowrap;
+      }
+
+      #toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      /* ── Scrollbar ── */
+      .notes-list::-webkit-scrollbar {
+        width: 4px;
+      }
+      .notes-list::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .notes-list::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="header-left">
+        <h3 class="app-name">My <em>Notes</em></h3>
+        <span class="note-pill" id="noteCount">0</span>
+      </div>
+      <div class="header-right">
+        <button class="icon-btn" id="themeBtn" title="Toggle theme">☽</button>
+        <button class="btn-full" id="openFullBtn">Full view ↗</button>
+      </div>
+    </div>
+
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="Search notes, domains, URLs…"
+      />
+    </div>
+
+    <div id="notesList" class="notes-list"></div>
+
+    <div id="pagination" class="pagination" style="display: none"></div>
+
+    <div class="footer">
+      <div class="footer-stat" id="storageText">0 KB</div>
+      <div style="display: flex; align-items: center; gap: 7px">
+        <div class="storage-bar-wrap">
+          <div class="storage-bar" id="storageBar"></div>
+        </div>
+        <div class="footer-stat" id="storageLabel">used</div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

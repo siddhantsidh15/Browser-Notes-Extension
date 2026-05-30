@@ -8,18 +8,18 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// Open the notes page when the extension icon is clicked
-// If already open, focus it instead of opening a duplicate
-chrome.action.onClicked.addListener(async () => {
-  const notesUrl = chrome.runtime.getURL("notes.html");
-  const existing = await chrome.tabs.query({ url: notesUrl });
-  if (existing.length > 0) {
-    await chrome.tabs.update(existing[0].id, { active: true });
-    await chrome.windows.update(existing[0].windowId, { focused: true });
-  } else {
-    chrome.tabs.create({ url: notesUrl });
-  }
-});
+// // Open the notes page when the extension icon is clicked
+// // If already open, focus it instead of opening a duplicate
+// chrome.action.onClicked.addListener(async () => {
+//   const notesUrl = chrome.runtime.getURL("notes.html");
+//   const existing = await chrome.tabs.query({ url: notesUrl });
+//   if (existing.length > 0) {
+//     await chrome.tabs.update(existing[0].id, { active: true });
+//     await chrome.windows.update(existing[0].windowId, { focused: true });
+//   } else {
+//     chrome.tabs.create({ url: notesUrl });
+//   }
+// });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "saveToNotes" && info.selectionText) {

@@ -110,10 +110,7 @@ function groupNotes(notes) {
       dateKey: dk,
       domains: Object.keys(map[dk]).map((d) => ({
         domain: d,
-        // Sorts the individual notes chronologically (oldest first) within the domain
-        notes: map[dk][d].sort(
-          (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-        ),
+        notes: map[dk][d],
       })),
     }));
 }
