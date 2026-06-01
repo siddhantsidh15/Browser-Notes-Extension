@@ -763,6 +763,80 @@
         background: var(--rule);
         border-radius: 3px;
       }
+      /* Layout updates for the search input container grid */
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .search-container {
+        display: flex;
+        align-items: center;
+        flex: 1;
+        position: relative;
+        background: var(--surface);
+        border: 1.5px solid var(--rule);
+        border-radius: 30px;
+        padding-right: 6px;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .search-container:focus-within {
+        border-color: var(--accent2);
+        box-shadow: 0 0 0 3px rgba(142, 68, 173, 0.12);
+      }
+
+      .search-input {
+        flex: 1;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        padding: 10px 14px 10px 18px;
+      }
+
+      .search-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .search-action-btn {
+        background: none;
+        border: 1px solid transparent;
+        color: var(--text-muted);
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 20px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.15s;
+      }
+
+      .search-action-btn:hover:not(:disabled) {
+        background: var(--bg2);
+        color: var(--text);
+      }
+
+      .search-action-btn.active {
+        background: var(--quote-bg);
+        border-color: var(--rule);
+        color: var(--accent2);
+        font-weight: 700;
+      }
+
+      .search-action-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body>
@@ -809,12 +883,28 @@
 
     <!-- ── Search + page info ────────────────────────────── -->
     <div class="toolbar">
-      <input
-        class="search-input"
-        id="searchInput"
-        type="text"
-        placeholder="Search notes, sources, or domains…"
-      />
+      <div class="search-container">
+        <input
+          class="search-input"
+          id="searchInput"
+          type="text"
+          placeholder="Search notes, sources, or domains…"
+        />
+        <div class="search-actions">
+          <button
+            class="search-action-btn"
+            id="caseSensitiveBtn"
+            title="Match Case (Aa)"
+          >
+            Aa
+          </button>
+          <button
+            class="search-action-btn"
+            id="copyAllBtn"
+            title="Copy All Filtered Notes"
+          ></button>
+        </div>
+      </div>
       <span class="page-info" id="pageInfo"></span>
     </div>
 

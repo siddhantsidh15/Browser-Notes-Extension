@@ -174,11 +174,11 @@ function dateBlockHTML(group, animDelay) {
 // Then re-group the page's notes for display.
 function getPageNotes(filtered) {
   const start = (currentPage - 1) * PER_PAGE;
-  return filtered.slice(start, start + PER_PAGE);
+  return currentFilteredNotes.slice(start, start + PER_PAGE);
 }
 
 function totalPages(filtered) {
-  return Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  return Math.max(1, Math.ceil(currentFilteredNotes.length / PER_PAGE));
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -331,19 +331,91 @@ function renderPagination(pages) {
   });
 }
 
+const caseSensitiveBtn = document.getElementById("caseSensitiveBtn");
+const copyAllBtn = document.getElementById("copyAllBtn");
+
+// ── State ─────────────────────────────────────────────────────────────────────
+// (Keep your existing state references, and append these two below)
+let isCaseSensitive = false;
+let currentFilteredNotes = [];
+
+// Clean programmatic inject of standard SVG Copy structure
+if (copyAllBtn) {
+  copyAllBtn.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+    </svg>`;
+  copyAllBtn.disabled = true; // Initialize disabled when search is blank
+}
+
 // ── Filter + render ───────────────────────────────────────────────────────────
 function filterAndRender() {
-  const q = searchInput.value.toLowerCase().trim();
-  const filtered = q
-    ? allNotes.filter(
-        (n) =>
-          n.text.toLowerCase().includes(q) ||
-          (n.title || "").toLowerCase().includes(q) ||
-          (n.domain || "").toLowerCase().includes(q) ||
-          (n.url || "").toLowerCase().includes(q)
-      )
+  const query = searchInput.value.trim();
+
+  // Handle the Copy All button state based on search query presence
+  if (copyAllBtn) {
+    copyAllBtn.disabled = query === "";
+  }
+
+  currentFilteredNotes = query
+    ? allNotes.filter((n) => {
+        const text = n.text || "";
+        const title = n.title || "";
+        const domain = n.domain || "";
+        const url = n.url || "";
+
+        if (isCaseSensitive) {
+          return (
+            text.includes(query) ||
+            title.includes(query) ||
+            domain.includes(query) ||
+            url.includes(query)
+          );
+        } else {
+          const q = query.toLowerCase();
+          return (
+            text.toLowerCase().includes(q) ||
+            title.toLowerCase().includes(q) ||
+            domain.toLowerCase().includes(q) ||
+            url.toLowerCase().includes(q)
+          );
+        }
+      })
     : allNotes;
-  render(filtered);
+
+  render(currentFilteredNotes);
+}
+
+// ── Search Action Handlers ────────────────────────────────────────────────────
+if (copyAllBtn) {
+  copyAllBtn.addEventListener("click", () => {
+    if (currentFilteredNotes.length === 0) {
+      showToast("❌ No notes to copy");
+      return;
+    }
+
+    // Concatenate only the plain text body contents without headings or dates
+    const textDump = currentFilteredNotes.map((n) => n.text).join("\n\n");
+
+    navigator.clipboard
+      .writeText(textDump)
+      .then(() => {
+        showToast(`📋 Copied ${currentFilteredNotes.length} notes!`);
+      })
+      .catch(() => {
+        showToast("❌ Failed to copy notes");
+      });
+  });
+}
+
+if (caseSensitiveBtn) {
+  caseSensitiveBtn.addEventListener("click", () => {
+    isCaseSensitive = !isCaseSensitive;
+    caseSensitiveBtn.classList.toggle("active", isCaseSensitive);
+    currentPage = 1;
+    filterAndRender();
+  });
 }
 
 function loadNotes() {

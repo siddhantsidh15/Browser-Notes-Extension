@@ -183,25 +183,101 @@ function renderPagination(total) {
   });
 }
 
+const caseSensitiveBtn = document.getElementById("caseSensitiveBtn");
+const copyAllBtn = document.getElementById("copyAllBtn");
+
+if (copyAllBtn) {
+  copyAllBtn.innerHTML = COPY_SVG;
+  copyAllBtn.disabled = true; // Initially disabled since the search bar starts empty
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+// (Keep your existing state variables and add this toggle tracking)
+let isCaseSensitive = false;
+let currentFilteredNotes = []; // Keeps track of exactly what is visible to the user
+
+// Add the Copy SVG icon to your copy all button programmatically
+if (copyAllBtn) copyAllBtn.innerHTML = COPY_SVG;
+
+// ── Filter & Render ───────────────────────────────────────────────────────────
 // ── Filter & Render ───────────────────────────────────────────────────────────
 function filterAndRender() {
-  const q = searchInput.value.toLowerCase().trim();
-  const filtered = q
-    ? allNotes.filter(
-        (n) =>
-          n.text.toLowerCase().includes(q) ||
-          (n.title || "").toLowerCase().includes(q) ||
-          (n.domain || "").toLowerCase().includes(q) ||
-          (n.url || "").toLowerCase().includes(q)
-      )
+  const query = searchInput.value.trim();
+
+  // Disable the copy button if the search bar is empty
+  if (query === "") {
+    copyAllBtn.disabled = true;
+  } else {
+    copyAllBtn.disabled = false;
+  }
+
+  // Apply filtering with respect to case sensitivity flag
+  currentFilteredNotes = query
+    ? allNotes.filter((n) => {
+        const text = n.text || "";
+        const title = n.title || "";
+        const domain = n.domain || "";
+        const url = n.url || "";
+
+        if (isCaseSensitive) {
+          return (
+            text.includes(query) ||
+            title.includes(query) ||
+            domain.includes(query) ||
+            url.includes(query)
+          );
+        } else {
+          const q = query.toLowerCase();
+          return (
+            text.toLowerCase().includes(q) ||
+            title.toLowerCase().includes(q) ||
+            domain.toLowerCase().includes(q) ||
+            url.toLowerCase().includes(q)
+          );
+        }
+      })
     : allNotes;
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(currentFilteredNotes.length / PER_PAGE)
+  );
   if (currentPage > totalPages) currentPage = totalPages;
 
   const start = (currentPage - 1) * PER_PAGE;
-  render(filtered.slice(start, start + PER_PAGE), filtered.length);
+  render(
+    currentFilteredNotes.slice(start, start + PER_PAGE),
+    currentFilteredNotes.length
+  );
 }
+
+// ── Bulk Actions ──────────────────────────────────────────────────────────────
+copyAllBtn.addEventListener("click", () => {
+  if (currentFilteredNotes.length === 0) {
+    showToast("No notes to copy");
+    return;
+  }
+
+  // Concatenate only the plain text bodies, separated cleanly by line breaks
+  const compiledText = currentFilteredNotes.map((n) => n.text).join("\n\n");
+
+  navigator.clipboard
+    .writeText(compiledText)
+    .then(() => {
+      showToast(`Copied ${currentFilteredNotes.length} notes`);
+    })
+    .catch(() => {
+      showToast("Copy failed");
+    });
+});
+
+// ── Case Sensitivity Toggle ───────────────────────────────────────────────────
+caseSensitiveBtn.addEventListener("click", () => {
+  isCaseSensitive = !isCaseSensitive;
+  caseSensitiveBtn.classList.toggle("active", isCaseSensitive);
+  currentPage = 1;
+  filterAndRender();
+});
 
 function loadNotes() {
   chrome.runtime.sendMessage({ action: "getNotes" }, (response) => {

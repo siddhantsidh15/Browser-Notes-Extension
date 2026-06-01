@@ -499,6 +499,73 @@
         background: var(--border);
         border-radius: 2px;
       }
+      /* Prevent selection of dates, times, and domain titles */
+      .date-heading,
+      .domain-row,
+      .note-top,
+      .note-actions {
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      /* Ensure only the actual body content feels natural to drag-select */
+      .note-body {
+        user-select: text;
+        -webkit-user-select: text;
+      }
+
+      /* Layout adjustments for the new search actions wrapper */
+      .search-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      #searchInput {
+        flex: 1;
+      }
+
+      .search-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .search-action-btn {
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        height: 29px;
+        padding: 0 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        transition: all 0.15s;
+      }
+
+      .search-action-btn:hover {
+        border-color: var(--border-hover);
+        color: var(--text);
+        background: var(--surface2);
+      }
+
+      /* Active state for case sensitivity toggle */
+      .search-action-btn.active {
+        background: var(--accent-dim);
+        border-color: var(--accent-border);
+        color: var(--accent);
+      }
+      .search-action-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        border-color: var(--border);
+        background: none;
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
@@ -520,6 +587,20 @@
         id="searchInput"
         placeholder="Search notes, domains, URLs…"
       />
+      <div class="search-actions">
+        <button
+          class="search-action-btn"
+          id="caseSensitiveBtn"
+          title="Match Case (Aa)"
+        >
+          Aa
+        </button>
+        <button
+          class="search-action-btn"
+          id="copyAllBtn"
+          title="Copy All Filtered Notes"
+        ></button>
+      </div>
     </div>
 
     <div id="notesList" class="notes-list"></div>
