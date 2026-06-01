@@ -311,11 +311,19 @@ function attachCardListeners() {
   });
 }
 
+function debounce(fn, delay) {
+  let timer;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
 // ── Search ────────────────────────────────────────────────────────────────────
-searchInput.addEventListener("input", () => {
+searchInput.addEventListener("input", debounce(() => {
   currentPage = 1;
   filterAndRender();
-});
+}, 200));
 
 // ── Full View ─────────────────────────────────────────────────────────────────
 openFullBtn.addEventListener("click", async () => {

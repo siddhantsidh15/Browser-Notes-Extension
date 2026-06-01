@@ -451,11 +451,22 @@ layoutToggle.addEventListener("change", () => {
   savePrefs({ layout: double_ ? "double" : "single" });
 });
 
+function debounce(fn, delay) {
+  let timer;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
 // ── Other events ──────────────────────────────────────────────────────────────
-searchInput.addEventListener("input", () => {
-  currentPage = 1;
-  filterAndRender();
-});
+searchInput.addEventListener(
+  "input",
+  debounce(() => {
+    currentPage = 1;
+    filterAndRender();
+  }, 200)
+);
 
 exportBtn.addEventListener("click", () => {
   chrome.runtime.sendMessage({ action: "exportNotes" });
