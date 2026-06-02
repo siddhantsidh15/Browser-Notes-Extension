@@ -316,6 +316,14 @@
         margin: 0;
         white-space: pre-wrap;
         word-break: break-word;
+        user-select: text;
+        -webkit-user-select: text;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        line-clamp: 15;
+        -webkit-line-clamp: 15;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       /* ── Card Action Buttons ── */
@@ -506,12 +514,6 @@
       .note-actions {
         user-select: none;
         -webkit-user-select: none;
-      }
-
-      /* Ensure only the actual body content feels natural to drag-select */
-      .note-body {
-        user-select: text;
-        -webkit-user-select: text;
       }
 
       /* Layout adjustments for the new search actions wrapper */
