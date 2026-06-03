@@ -49,6 +49,7 @@
         --toggle-bg: #d9d5c8;
         --toggle-knob: #ffffff;
         --toggle-on: #8e44ad;
+        --green: #1a9e6b;
       }
 
       [data-theme="dark"] {
@@ -77,6 +78,7 @@
         --toggle-bg: #2e2e50;
         --toggle-knob: #ffffff;
         --toggle-on: #a070e0;
+        --green: #6bffc0;
       }
 
       /* ═══════════════════════════════════════════════════════════
@@ -734,6 +736,34 @@
       /* Active click effect */
       .note-copy:active {
         transform: scale(0.9);
+      }
+
+      .copy-indicators {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        margin: 0 4px;
+      }
+
+      .copy-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        transition:
+          background 0.2s,
+          border-color 0.2s;
+      }
+
+      .copy-dot.active {
+        background: var(--green);
+        border-color: var(--green);
+        box-shadow: 0 0 4px rgba(26, 158, 107, 0.4);
+      }
+
+      [data-theme="dark"] .copy-dot.active {
+        box-shadow: 0 0 4px rgba(107, 255, 192, 0.4);
       }
 
       /* ═══════════════════════════════════════════════════════════

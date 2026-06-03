@@ -121,6 +121,13 @@ function noteCardHTML(note, idx) {
     .split(/\n{2,}/)
     .map((p) => `<p>${esc(p.trim())}</p>`)
     .join("");
+
+  // Calculate copy dot states
+  const count = note.copyCount || 0;
+  const d1 = count >= 1 ? "active" : "";
+  const d2 = count >= 2 ? "active" : "";
+  const d3 = count >= 3 ? "active" : "";
+
   return `
   <div class="note-card" data-id="${note.id}">
     <button class="note-delete" data-id="${note.id}" title="Delete">✕</button>
@@ -135,6 +142,11 @@ function noteCardHTML(note, idx) {
       <span class="note-time">${formatTime(note.timestamp)}</span>
       <a class="note-source-link" href="${esc(note.url)}" target="_blank"
          title="${esc(note.url)}">↗ ${esc(note.title || note.url)}</a>
+      <div class="copy-indicators" title="Copied ${count} times">
+        <div class="copy-dot ${d1}"></div>
+        <div class="copy-dot ${d2}"></div>
+        <div class="copy-dot ${d3}"></div>
+      </div>
     </div>
     <div class="note-body">${paragraphs}</div>
   </div>`;
@@ -269,6 +281,33 @@ function render(filtered) {
           .writeText(noteToCopy.text)
           .then(() => {
             showToast("📋 Copied to clipboard!");
+
+            // 1. Increment the copy counter in memory
+            noteToCopy.copyCount = (noteToCopy.copyCount || 0) + 1;
+
+            // 2. Update the UI immediately without re-rendering the whole page
+            const card = document.querySelector(`.note-card[data-id="${id}"]`);
+            if (card) {
+              const dots = card.querySelectorAll(".copy-dot");
+              if (noteToCopy.copyCount >= 1 && dots[0])
+                dots[0].classList.add("active");
+              if (noteToCopy.copyCount >= 2 && dots[1])
+                dots[1].classList.add("active");
+              if (noteToCopy.copyCount >= 3 && dots[2])
+                dots[2].classList.add("active");
+              card.querySelector(".copy-indicators").title =
+                `Copied ${noteToCopy.copyCount} times`;
+            }
+
+            // 3. Save the updated copy count permanently to Chrome Storage
+            chrome.storage.local.get(["notes"], (res) => {
+              const dbNotes = res.notes || [];
+              const dbNote = dbNotes.find((n) => n.id === id);
+              if (dbNote) {
+                dbNote.copyCount = noteToCopy.copyCount;
+                chrome.storage.local.set({ notes: dbNotes });
+              }
+            });
           })
           .catch((err) => {
             showToast("❌ Failed to copy");
