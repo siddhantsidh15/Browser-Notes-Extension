@@ -155,6 +155,9 @@
         background: var(--surface);
         border-bottom: 1px solid var(--border);
         position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
 
       .search-icon {
@@ -168,7 +171,7 @@
       }
 
       input[type="text"] {
-        width: 100%;
+        flex: 1;
         background: var(--surface2);
         border: 1px solid var(--border);
         border-radius: 8px;
@@ -185,6 +188,47 @@
       }
       input[type="text"]:focus {
         border-color: var(--accent-border);
+      }
+
+      .search-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .search-action-btn {
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        height: 29px;
+        padding: 0 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        transition: all 0.15s;
+      }
+
+      .search-action-btn:hover {
+        border-color: var(--border-hover);
+        color: var(--text);
+        background: var(--surface2);
+      }
+
+      .search-action-btn.active {
+        background: var(--accent-dim);
+        border-color: var(--accent-border);
+        color: var(--accent);
+      }
+      .search-action-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        border-color: var(--border);
+        background: none;
+        color: var(--muted);
       }
 
       /* ── Notes List ── */
@@ -295,6 +339,29 @@
         letter-spacing: 0.3px;
       }
 
+      /* ── Copy Dots ── */
+      .copy-indicators {
+        display: flex;
+        gap: 4px;
+        margin-left: 10px;
+        align-items: center;
+      }
+
+      .copy-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        transition: background 0.2s, border-color 0.2s;
+      }
+
+      .copy-dot.active {
+        background: var(--green);
+        border-color: var(--green);
+        box-shadow: 0 0 4px rgba(107, 255, 192, 0.4);
+      }
+
       .note-source {
         font-family: "DM Mono", monospace;
         font-size: 10px;
@@ -320,8 +387,8 @@
         -webkit-user-select: text;
         display: -webkit-box;
         -webkit-box-orient: vertical;
-        line-clamp: 15;
-        -webkit-line-clamp: 15;
+        line-clamp: 10;
+        -webkit-line-clamp: 10;
         overflow: hidden;
         text-overflow: ellipsis;
       }
@@ -507,66 +574,13 @@
         background: var(--border);
         border-radius: 2px;
       }
-      /* Prevent selection of dates, times, and domain titles */
+
       .date-heading,
       .domain-row,
       .note-top,
       .note-actions {
         user-select: none;
         -webkit-user-select: none;
-      }
-
-      /* Layout adjustments for the new search actions wrapper */
-      .search-wrap {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      #searchInput {
-        flex: 1;
-      }
-
-      .search-actions {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      }
-
-      .search-action-btn {
-        background: none;
-        border: 1px solid var(--border);
-        color: var(--muted);
-        height: 29px;
-        padding: 0 8px;
-        border-radius: 6px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: "DM Mono", monospace;
-        font-size: 11px;
-        transition: all 0.15s;
-      }
-
-      .search-action-btn:hover {
-        border-color: var(--border-hover);
-        color: var(--text);
-        background: var(--surface2);
-      }
-
-      /* Active state for case sensitivity toggle */
-      .search-action-btn.active {
-        background: var(--accent-dim);
-        border-color: var(--accent-border);
-        color: var(--accent);
-      }
-      .search-action-btn:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-        border-color: var(--border);
-        background: none;
-        color: var(--muted);
       }
     </style>
   </head>

@@ -8,16 +8,25 @@ const storageBar = document.getElementById("storageBar");
 const noteCount = document.getElementById("noteCount");
 const paginationEl = document.getElementById("pagination");
 const toast = document.getElementById("toast");
+const caseSensitiveBtn = document.getElementById("caseSensitiveBtn");
+const copyAllBtn = document.getElementById("copyAllBtn");
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let allNotes = [];
+let currentFilteredNotes = [];
 let currentPage = 1;
 const PER_PAGE = 10;
 let isDark = true;
+let isCaseSensitive = false;
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 const COPY_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const DEL_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+
+if (copyAllBtn) {
+  copyAllBtn.innerHTML = COPY_SVG;
+  copyAllBtn.disabled = true;
+}
 
 // ── Prefs ─────────────────────────────────────────────────────────────────────
 async function loadPrefs() {
@@ -131,10 +140,24 @@ function render(pageNotes, totalFiltered) {
           hour: "2-digit",
           minute: "2-digit",
         });
+
+        // Calculate dot states based on how many times the note was copied
+        const count = note.copyCount || 0;
+        const d1 = count >= 1 ? "active" : "";
+        const d2 = count >= 2 ? "active" : "";
+        const d3 = count >= 3 ? "active" : "";
+
         html += `
         <div class="note-card" data-id="${note.id}">
           <div class="note-top">
-            <span class="note-time">${time}</span>
+            <div style="display: flex; align-items: center;">
+              <span class="note-time">${time}</span>
+              <div class="copy-indicators" title="Copied ${count} times">
+                <div class="copy-dot ${d1}"></div>
+                <div class="copy-dot ${d2}"></div>
+                <div class="copy-dot ${d3}"></div>
+              </div>
+            </div>
             <a class="note-source" href="${esc(note.url)}" target="_blank">source ↗</a>
           </div>
           <p class="note-body">${esc(note.text)}</p>
@@ -183,35 +206,14 @@ function renderPagination(total) {
   });
 }
 
-const caseSensitiveBtn = document.getElementById("caseSensitiveBtn");
-const copyAllBtn = document.getElementById("copyAllBtn");
-
-if (copyAllBtn) {
-  copyAllBtn.innerHTML = COPY_SVG;
-  copyAllBtn.disabled = true; // Initially disabled since the search bar starts empty
-}
-
-// ── State ─────────────────────────────────────────────────────────────────────
-// (Keep your existing state variables and add this toggle tracking)
-let isCaseSensitive = false;
-let currentFilteredNotes = []; // Keeps track of exactly what is visible to the user
-
-// Add the Copy SVG icon to your copy all button programmatically
-if (copyAllBtn) copyAllBtn.innerHTML = COPY_SVG;
-
-// ── Filter & Render ───────────────────────────────────────────────────────────
 // ── Filter & Render ───────────────────────────────────────────────────────────
 function filterAndRender() {
   const query = searchInput.value.trim();
 
-  // Disable the copy button if the search bar is empty
-  if (query === "") {
-    copyAllBtn.disabled = true;
-  } else {
-    copyAllBtn.disabled = false;
+  if (copyAllBtn) {
+    copyAllBtn.disabled = query === "";
   }
 
-  // Apply filtering with respect to case sensitivity flag
   currentFilteredNotes = query
     ? allNotes.filter((n) => {
         const text = n.text || "";
@@ -252,32 +254,34 @@ function filterAndRender() {
 }
 
 // ── Bulk Actions ──────────────────────────────────────────────────────────────
-copyAllBtn.addEventListener("click", () => {
-  if (currentFilteredNotes.length === 0) {
-    showToast("No notes to copy");
-    return;
-  }
+if (copyAllBtn) {
+  copyAllBtn.addEventListener("click", () => {
+    if (currentFilteredNotes.length === 0) {
+      showToast("No notes to copy");
+      return;
+    }
 
-  // Concatenate only the plain text bodies, separated cleanly by line breaks
-  const compiledText = currentFilteredNotes.map((n) => n.text).join("\n\n");
+    const compiledText = currentFilteredNotes.map((n) => n.text).join("\n\n");
 
-  navigator.clipboard
-    .writeText(compiledText)
-    .then(() => {
-      showToast(`Copied ${currentFilteredNotes.length} notes`);
-    })
-    .catch(() => {
-      showToast("Copy failed");
-    });
-});
+    navigator.clipboard
+      .writeText(compiledText)
+      .then(() => {
+        showToast(`Copied ${currentFilteredNotes.length} notes`);
+      })
+      .catch(() => {
+        showToast("Copy failed");
+      });
+  });
+}
 
-// ── Case Sensitivity Toggle ───────────────────────────────────────────────────
-caseSensitiveBtn.addEventListener("click", () => {
-  isCaseSensitive = !isCaseSensitive;
-  caseSensitiveBtn.classList.toggle("active", isCaseSensitive);
-  currentPage = 1;
-  filterAndRender();
-});
+if (caseSensitiveBtn) {
+  caseSensitiveBtn.addEventListener("click", () => {
+    isCaseSensitive = !isCaseSensitive;
+    caseSensitiveBtn.classList.toggle("active", isCaseSensitive);
+    currentPage = 1;
+    filterAndRender();
+  });
+}
 
 function loadNotes() {
   chrome.runtime.sendMessage({ action: "getNotes" }, (response) => {
@@ -303,10 +307,36 @@ function attachCardListeners() {
     btn.addEventListener("click", () => {
       const id = parseInt(btn.dataset.id);
       const note = allNotes.find((n) => n.id === id);
-      if (note)
-        navigator.clipboard
-          .writeText(note.text)
-          .then(() => showToast("copied"));
+
+      if (note) {
+        navigator.clipboard.writeText(note.text).then(() => {
+          showToast("copied");
+
+          // Increment the copy counter in memory
+          note.copyCount = (note.copyCount || 0) + 1;
+
+          // Update the UI immediately without fully re-rendering the list
+          const card = document.querySelector(`.note-card[data-id="${id}"]`);
+          if (card) {
+            const dots = card.querySelectorAll(".copy-dot");
+            if (note.copyCount >= 1 && dots[0]) dots[0].classList.add("active");
+            if (note.copyCount >= 2 && dots[1]) dots[1].classList.add("active");
+            if (note.copyCount >= 3 && dots[2]) dots[2].classList.add("active");
+            card.querySelector(".copy-indicators").title =
+              `Copied ${note.copyCount} times`;
+          }
+
+          // Save the updated copy count permanently to Chrome Storage
+          chrome.storage.local.get(["notes"], (res) => {
+            const dbNotes = res.notes || [];
+            const dbNote = dbNotes.find((n) => n.id === id);
+            if (dbNote) {
+              dbNote.copyCount = note.copyCount;
+              chrome.storage.local.set({ notes: dbNotes });
+            }
+          });
+        });
+      }
     });
   });
 }
@@ -320,10 +350,13 @@ function debounce(fn, delay) {
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────
-searchInput.addEventListener("input", debounce(() => {
-  currentPage = 1;
-  filterAndRender();
-}, 200));
+searchInput.addEventListener(
+  "input",
+  debounce(() => {
+    currentPage = 1;
+    filterAndRender();
+  }, 200)
+);
 
 // ── Full View ─────────────────────────────────────────────────────────────────
 openFullBtn.addEventListener("click", async () => {
