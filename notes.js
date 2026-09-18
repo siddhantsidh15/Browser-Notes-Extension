@@ -576,6 +576,7 @@ const typedRightCol = document.getElementById("typedRightCol");
 const clearTypedBtn = document.getElementById("clearTypedBtn");
 
 function typedNoteCardHTML(note) {
+  const COPY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
   return `
   <div class="note-card" data-id="${note.id}">
     <button class="typed-note-delete" data-id="${note.id}" title="Delete">✕</button>
@@ -584,7 +585,11 @@ function typedNoteCardHTML(note) {
       ${note.url ? `<a class="note-source-link" href="${esc(note.url)}" target="_blank" title="${esc(note.url)}">↗ ${esc(note.title || note.url)}</a>` : ""}
     </div>
     <div class="typed-note-body">
-      <div class="md-content">${Markdown.render(note.text)}</div>
+      <div class="md-content" data-raw="${esc(note.text)}">${Markdown.render(note.text)}</div>
+    </div>
+    <div class="typed-card-actions">
+      <button class="typed-expand-btn" title="Expand / collapse">Show more</button>
+      <button class="typed-copy-btn" data-id="${note.id}" title="Copy note text">${COPY_SVG}</button>
     </div>
   </div>`;
 }
@@ -635,8 +640,42 @@ function renderTypedNotes(notes) {
   typedLeftCol.innerHTML = buildTypedColHTML(groupNotes(notes.slice(0, mid)));
   typedRightCol.innerHTML = buildTypedColHTML(groupNotes(notes.slice(mid)));
 
-  // Attach delete listeners
-  document.querySelectorAll(".typed-note-delete").forEach((btn) => {
+  // ── Hide expand button when content doesn't overflow the cap ──
+  document.querySelectorAll("#view-typed .md-content").forEach((el) => {
+    // scrollHeight === clientHeight means no overflow — content fits
+    if (el.scrollHeight <= el.clientHeight) {
+      const btn = el.closest(".note-card")?.querySelector(".typed-expand-btn");
+      if (btn) btn.style.display = "none";
+    }
+  });
+
+  // ── Expand / collapse ──────────────────────────────────────────
+  document.querySelectorAll("#view-typed .typed-expand-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mdEl = btn.closest(".note-card")?.querySelector(".md-content");
+      if (!mdEl) return;
+      const expanded = mdEl.classList.toggle("expanded");
+      btn.textContent = expanded ? "Show less" : "Show more";
+    });
+  });
+
+  // ── Copy ──────────────────────────────────────────────────────
+  document.querySelectorAll("#view-typed .typed-copy-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mdEl = btn.closest(".note-card")?.querySelector(".md-content");
+      if (!mdEl) return;
+      // Use data-raw for the original plain text
+      const rawText = mdEl.dataset.raw || mdEl.textContent;
+      navigator.clipboard.writeText(rawText).then(() => {
+        btn.classList.add("copied");
+        showToast("📋 Copied!");
+        setTimeout(() => btn.classList.remove("copied"), 1800);
+      }).catch(() => showToast("❌ Failed to copy"));
+    });
+  });
+
+  // ── Delete ────────────────────────────────────────────────────
+  document.querySelectorAll("#view-typed .typed-note-delete").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = parseInt(btn.dataset.id);
       chrome.runtime.sendMessage({ action: "deleteTypedNote", id }, () => {

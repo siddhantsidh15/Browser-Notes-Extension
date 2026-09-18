@@ -15,6 +15,7 @@ const tabBtns = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
 const notepadTextarea = document.getElementById("notepadTextarea");
 const notepadTarget = document.getElementById("notepadTarget");
+const notepadPreview = document.getElementById("notepadPreview");
 const saveNoteBtn = document.getElementById("saveNoteBtn");
 const typedNotesList = document.getElementById("typedNotesList");
 
@@ -27,6 +28,7 @@ let isDark = true;
 let isCaseSensitive = false;
 let allTypedNotes = [];
 let activeTabInfo = null; // { url, title, domain } of the page focused when popup opened
+let draftImages = {}; // id -> base64 data URL, for images pasted into the notepad this session
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 const COPY_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
@@ -68,7 +70,26 @@ const Markdown = {
     {
       name: "codeBlock",
       pattern: /```([\s\S]*?)```/g,
-      render: (_match, code) => `<pre class="md-code"><code>${code}</code></pre>`,
+      render: (_match, code) =>
+        `<pre class="md-code"><code>${code}</code></pre>`,
+    },
+    // Pasted image placeholder: [[img:<id>]] — the actual base64 data lives
+    // in a separate `images` map (never inline in the text itself), passed
+    // in as the last argument by render() below.
+    {
+      name: "image",
+      pattern: /\[\[img:([\w-]+)\]\]/g,
+      render: (_match, id, _offset, _str, images) => {
+        const src = images && images[id];
+        if (!src) return "";
+        return `<img class="md-image" src="${src}" alt="pasted image" />`;
+      },
+    },
+    // >C text >C → boxed rectangle (the >C markers are omitted from output)
+    {
+      name: "box",
+      pattern: /&gt;C([\s\S]*?)&gt;C/g,
+      render: (_match, inner) => `<div class="md-box">${inner.trim()}</div>`,
     },
     // Headings — order matters: longest marker first so "### x" isn't
     // partially matched by the "##" or "#" rule.
@@ -95,11 +116,14 @@ const Markdown = {
     },
   ],
 
-  // Converts raw typed-note text into safe HTML.
-  render(rawText) {
+  // Converts raw typed-note text into safe HTML. `images` maps
+  // [[img:<id>]] placeholders to their base64 data URLs.
+  render(rawText, images = {}) {
     let html = esc(rawText || "");
     for (const rule of this.rules) {
-      html = html.replace(rule.pattern, (...args) => rule.render(...args));
+      html = html.replace(rule.pattern, (...args) =>
+        rule.render(...args, images)
+      );
     }
     return html;
   },
@@ -498,6 +522,70 @@ function renderNotepadTarget() {
     : "";
 }
 
+// ── Live preview ──────────────────────────────────────────────────────────────
+function updateNotepadPreview() {
+  if (!notepadPreview) return;
+  const text = notepadTextarea.value;
+  if (!text.trim()) {
+    notepadPreview.innerHTML = `<span class="notepad-preview-placeholder">Nothing to preview yet…</span>`;
+    return;
+  }
+  notepadPreview.innerHTML = Markdown.render(text, draftImages);
+}
+
+if (notepadTextarea) {
+  notepadTextarea.addEventListener("input", updateNotepadPreview);
+}
+
+// ── Insert text at the current cursor position, replacing any selection ──────
+function insertAtCursor(el, text) {
+  const start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd ?? el.value.length;
+  el.value = el.value.slice(0, start) + text + el.value.slice(end);
+  const pos = start + text.length;
+  el.selectionStart = el.selectionEnd = pos;
+  el.focus();
+}
+
+// ── Paste an image from the clipboard into the note ───────────────────────────
+// The image is stored as a base64 data URL in `draftImages`, keyed by a short
+// id; only a compact [[img:<id>]] token is inserted into the text itself so
+// the textarea stays readable. Markdown.render() swaps the token back for an
+// <img> at display time.
+if (notepadTextarea) {
+  notepadTextarea.addEventListener("paste", (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (!item.type.startsWith("image/")) continue;
+      const file = item.getAsFile();
+      if (!file) continue;
+      e.preventDefault();
+      const reader = new FileReader();
+      reader.onload = () => {
+        const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+        draftImages[id] = reader.result;
+        insertAtCursor(notepadTextarea, `[[img:${id}]]`);
+        updateNotepadPreview();
+      };
+      reader.readAsDataURL(file);
+      break; // one image per paste
+    }
+  });
+}
+
+// Only keep images whose [[img:<id>]] token still appears in the given text —
+// drops anything the user pasted then deleted before saving.
+function pruneImages(text, images) {
+  const used = {};
+  const re = /\[\[img:([\w-]+)\]\]/g;
+  let m;
+  while ((m = re.exec(text))) {
+    if (images[m[1]]) used[m[1]] = images[m[1]];
+  }
+  return used;
+}
+
 if (saveNoteBtn) {
   saveNoteBtn.addEventListener("click", async () => {
     const text = notepadTextarea.value.trim();
@@ -509,6 +597,7 @@ if (saveNoteBtn) {
     saveNoteBtn.disabled = true;
     // Re-detect in case the user switched tabs/windows while typing.
     const target = (await detectActiveTab()) || activeTabInfo;
+    const images = pruneImages(text, draftImages);
 
     const note = {
       id: Date.now(),
@@ -517,6 +606,7 @@ if (saveNoteBtn) {
       title: target?.title || "",
       domain: target?.domain || "",
       timestamp: new Date().toISOString(),
+      images,
     };
 
     chrome.runtime.sendMessage(
@@ -525,8 +615,12 @@ if (saveNoteBtn) {
         saveNoteBtn.disabled = false;
         if (response?.success) {
           notepadTextarea.value = "";
+          draftImages = {};
+          updateNotepadPreview();
           showToast("Note saved");
-          if (document.getElementById("panel-typed")?.classList.contains("active")) {
+          if (
+            document.getElementById("panel-typed")?.classList.contains("active")
+          ) {
             loadTypedNotes();
           }
         } else {
@@ -575,9 +669,11 @@ function renderTypedNotes(notes) {
             <span class="note-time">${time}</span>
             <a class="note-source" href="${esc(note.url)}" target="_blank">source ↗</a>
           </div>
-          <div class="md-content">${Markdown.render(note.text)}</div>
-          <div class="note-actions">
-            <button class="card-btn del typed-delete-btn" data-id="${note.id}" title="Delete">${DEL_SVG}</button>
+          <div class="md-content" data-raw="${esc(note.text)}">${Markdown.render(note.text, note.images || {})}</div>
+          <div class="typed-card-actions">
+            <button class="typed-expand-btn" title="Expand / collapse">Show more</button>
+            <button class="typed-copy-btn" data-id="${note.id}" title="Copy note text">${COPY_SVG}</button>
+            <button class="card-btn del typed-delete-btn" data-id="${note.id}" title="Delete" style="margin-left:auto;">${DEL_SVG}</button>
           </div>
         </div>`;
       }
@@ -587,6 +683,42 @@ function renderTypedNotes(notes) {
 
   typedNotesList.innerHTML = html;
 
+  // ── Hide expand button when content doesn't overflow ──
+  typedNotesList.querySelectorAll(".md-content").forEach((el) => {
+    if (el.scrollHeight <= el.clientHeight) {
+      const btn = el.closest(".note-card")?.querySelector(".typed-expand-btn");
+      if (btn) btn.style.display = "none";
+    }
+  });
+
+  // ── Expand / collapse ──
+  typedNotesList.querySelectorAll(".typed-expand-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mdEl = btn.closest(".note-card")?.querySelector(".md-content");
+      if (!mdEl) return;
+      const expanded = mdEl.classList.toggle("expanded");
+      btn.textContent = expanded ? "Show less" : "Show more";
+    });
+  });
+
+  // ── Copy ──
+  typedNotesList.querySelectorAll(".typed-copy-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mdEl = btn.closest(".note-card")?.querySelector(".md-content");
+      if (!mdEl) return;
+      const rawText = mdEl.dataset.raw || mdEl.textContent;
+      navigator.clipboard
+        .writeText(rawText)
+        .then(() => {
+          btn.classList.add("copied");
+          showToast("copied");
+          setTimeout(() => btn.classList.remove("copied"), 1800);
+        })
+        .catch(() => showToast("copy failed"));
+    });
+  });
+
+  // ── Delete ──
   typedNotesList.querySelectorAll(".typed-delete-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = parseInt(btn.dataset.id);
@@ -613,4 +745,5 @@ function loadTypedNotes() {
   loadNotes();
   activeTabInfo = await detectActiveTab();
   renderNotepadTarget();
+  updateNotepadPreview();
 })();

@@ -658,9 +658,9 @@
       }
 
       .notepad-textarea {
-        flex: 1;
-        min-height: 300px;
-        resize: none;
+        flex: none;
+        height: 140px;
+        resize: vertical;
         background: var(--surface2);
         border: 1px solid var(--border);
         border-radius: 8px;
@@ -675,6 +675,41 @@
 
       .notepad-textarea:focus {
         border-color: var(--accent-border);
+      }
+
+      /* ── Live preview pane ── */
+      .notepad-preview-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .notepad-preview-label {
+        font-family: "DM Mono", monospace;
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .notepad-preview-box {
+        flex: 1;
+        min-height: 110px;
+        max-height: 220px;
+        overflow-y: auto;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      .notepad-preview-placeholder {
+        color: var(--muted);
+        font-style: italic;
+        font-size: 12.5px;
       }
 
       .notepad-actions {
@@ -729,6 +764,7 @@
       }
 
       /* Rendered markdown output inside a note card */
+      /* ── Collapsible md-content ── */
       .md-content {
         font-size: 13px;
         line-height: 1.6;
@@ -737,6 +773,31 @@
         word-break: break-word;
         user-select: text;
         -webkit-user-select: text;
+        /* Collapsed: ~15 lines × 1.6 × 13px ≈ 312px */
+        max-height: 312px;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        position: relative;
+      }
+
+      /* Fade-out gradient at the bottom when collapsed */
+      .md-content:not(.expanded)::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 40px;
+        background: linear-gradient(to bottom, transparent, var(--surface2));
+        pointer-events: none;
+      }
+
+      .md-content.expanded {
+        max-height: none;
+      }
+
+      .md-content.expanded::after {
+        display: none;
       }
 
       .md-content h1 {
@@ -766,6 +827,21 @@
         text-decoration: underline;
       }
 
+      .md-content .md-box {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin: 6px 0;
+        background: var(--surface2);
+      }
+
+      .md-content .md-image {
+        display: block;
+        max-width: 100%;
+        border-radius: 6px;
+        margin: 6px 0;
+      }
+
       .md-content pre.md-code {
         background: var(--bg);
         border: 1px solid var(--border);
@@ -779,6 +855,61 @@
       .md-content pre.md-code code {
         font-family: "DM Mono", monospace;
         font-size: 12px;
+      }
+
+      /* ── Typed note action row (expand + copy) ── */
+      .typed-card-actions {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 7px;
+      }
+
+      .typed-expand-btn {
+        font-family: "DM Mono", monospace;
+        font-size: 9.5px;
+        letter-spacing: 0.3px;
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        padding: 3px 9px;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.15s;
+        flex-shrink: 0;
+      }
+
+      .typed-expand-btn:hover {
+        border-color: var(--accent-border);
+        color: var(--accent);
+        background: var(--accent-dim);
+      }
+
+      .typed-copy-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        width: 24px;
+        height: 24px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.15s;
+        padding: 0;
+        flex-shrink: 0;
+      }
+
+      .typed-copy-btn:hover {
+        border-color: var(--accent-border);
+        color: var(--accent);
+        background: var(--accent-dim);
+      }
+
+      .typed-copy-btn.copied {
+        border-color: var(--green);
+        color: var(--green);
       }
     </style>
   </head>
@@ -835,13 +966,20 @@
           <code># text</code> → small heading · <code>## text</code> → medium
           heading · <code>### text</code> → large heading ·
           <code>:text:</code> → underline · triple-backtick fenced text → code
-          block
+          block · <code>&gt;C text &gt;C</code> → boxed · paste an image to
+          embed it
         </div>
         <textarea
           id="notepadTextarea"
           class="notepad-textarea"
-          placeholder="Type your note here…"
+          placeholder="Type your note here… paste an image, or wrap text in >C … >C for a box"
         ></textarea>
+        <div class="notepad-preview-wrap">
+          <div class="notepad-preview-label">Live preview</div>
+          <div class="notepad-preview-box">
+            <div id="notepadPreview" class="md-content expanded"></div>
+          </div>
+        </div>
         <div class="notepad-actions">
           <span class="notepad-target" id="notepadTarget"></span>
           <button class="btn-primary" id="saveNoteBtn">Save note</button>
