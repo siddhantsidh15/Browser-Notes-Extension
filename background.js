@@ -112,6 +112,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "getTypedNotes") {
+    chrome.storage.local.get(["typedNotes"]).then((result) => {
+      sendResponse({ notes: result.typedNotes || [] });
+    });
+    return true;
+  }
+
+  if (message.action === "saveTypedNote") {
+    chrome.storage.local.get(["typedNotes"]).then((result) => {
+      const typedNotes = result.typedNotes || [];
+      typedNotes.push(message.note);
+      chrome.storage.local
+        .set({ typedNotes })
+        .then(() => sendResponse({ success: true }));
+    });
+    return true;
+  }
+
+  if (message.action === "deleteTypedNote") {
+    chrome.storage.local.get(["typedNotes"]).then((result) => {
+      const typedNotes = (result.typedNotes || []).filter(
+        (n) => n.id !== message.id
+      );
+      chrome.storage.local
+        .set({ typedNotes })
+        .then(() => sendResponse({ success: true }));
+    });
+    return true;
+  }
+
+  if (message.action === "clearTypedNotes") {
+    chrome.storage.local
+      .set({ typedNotes: [] })
+      .then(() => sendResponse({ success: true }));
+    return true;
+  }
+
   if (message.action === "exportNotes") {
     chrome.storage.local.get(["notes"]).then((result) => {
       const markdown = buildMarkdown(result.notes || []);

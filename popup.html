@@ -587,6 +587,199 @@
         user-select: none;
         -webkit-user-select: none;
       }
+
+      /* ── Tabs ── */
+      .tabs {
+        display: flex;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .tab-btn {
+        flex: 1;
+        background: none;
+        border: none;
+        padding: 10px 0 9px;
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--muted);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.15s;
+      }
+
+      .tab-btn:hover {
+        color: var(--text);
+      }
+
+      .tab-btn.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+
+      .tab-panel {
+        display: none;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .tab-panel.active {
+        display: flex;
+      }
+
+      /* ── Notepad (Tab 2) ── */
+      .notepad-wrap {
+        padding: 14px 16px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1;
+        min-height: 420px;
+      }
+
+      .notepad-hint {
+        font-family: "DM Mono", monospace;
+        font-size: 9.5px;
+        color: var(--muted);
+        letter-spacing: 0.2px;
+        line-height: 1.7;
+      }
+
+      .notepad-hint code {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 0 4px;
+        color: var(--text);
+      }
+
+      .notepad-textarea {
+        flex: 1;
+        min-height: 300px;
+        resize: none;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-family: "DM Mono", monospace;
+        font-size: 12.5px;
+        line-height: 1.6;
+        padding: 12px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+
+      .notepad-textarea:focus {
+        border-color: var(--accent-border);
+      }
+
+      .notepad-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .notepad-target {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 60%;
+      }
+
+      .btn-primary {
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        background: var(--accent);
+        border: 1px solid var(--accent);
+        color: #fff;
+        padding: 7px 18px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: opacity 0.15s;
+      }
+
+      .btn-primary:hover {
+        opacity: 0.88;
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      /* ── Typed Notes (Tab 3) ── */
+      .typed-list {
+        padding: 10px 14px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 380px;
+        max-height: 420px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+
+      /* Rendered markdown output inside a note card */
+      .md-content {
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text);
+        white-space: pre-wrap;
+        word-break: break-word;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+
+      .md-content h1 {
+        font-family: "Fraunces", serif;
+        font-weight: 600;
+        font-size: 19px;
+        line-height: 1.3;
+        margin: 2px 0 4px;
+      }
+
+      .md-content h2 {
+        font-family: "Fraunces", serif;
+        font-weight: 600;
+        font-size: 16px;
+        line-height: 1.3;
+        margin: 2px 0 4px;
+      }
+
+      .md-content h3 {
+        font-weight: 600;
+        font-size: 13.5px;
+        line-height: 1.3;
+        margin: 2px 0 3px;
+      }
+
+      .md-content u {
+        text-decoration: underline;
+      }
+
+      .md-content pre.md-code {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin: 4px 0;
+        overflow-x: auto;
+        white-space: pre;
+      }
+
+      .md-content pre.md-code code {
+        font-family: "DM Mono", monospace;
+        font-size: 12px;
+      }
     </style>
   </head>
   <body>
@@ -601,32 +794,65 @@
       </div>
     </div>
 
-    <div class="search-wrap">
-      <span class="search-icon">⌕</span>
-      <input
-        type="text"
-        id="searchInput"
-        placeholder="Search notes, domains, URLs…"
-      />
-      <div class="search-actions">
-        <button
-          class="search-action-btn"
-          id="caseSensitiveBtn"
-          title="Match Case (Aa)"
-        >
-          Aa
-        </button>
-        <button
-          class="search-action-btn"
-          id="copyAllBtn"
-          title="Copy All Filtered Notes"
-        ></button>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="notes">Notes</button>
+      <button class="tab-btn" data-tab="notepad">Notepad</button>
+      <button class="tab-btn" data-tab="typed">Typed</button>
+    </div>
+
+    <div class="tab-panel active" id="panel-notes">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="Search notes, domains, URLs…"
+        />
+        <div class="search-actions">
+          <button
+            class="search-action-btn"
+            id="caseSensitiveBtn"
+            title="Match Case (Aa)"
+          >
+            Aa
+          </button>
+          <button
+            class="search-action-btn"
+            id="copyAllBtn"
+            title="Copy All Filtered Notes"
+          ></button>
+        </div>
+      </div>
+
+      <div id="notesList" class="notes-list"></div>
+
+      <div id="pagination" class="pagination" style="display: none"></div>
+    </div>
+
+    <div class="tab-panel" id="panel-notepad">
+      <div class="notepad-wrap">
+        <div class="notepad-hint">
+          <code># text</code> → small heading ·
+          <code>## text</code> → medium heading ·
+          <code>### text</code> → large heading ·
+          <code>:text:</code> → underline · triple-backtick fenced text → code
+          block
+        </div>
+        <textarea
+          id="notepadTextarea"
+          class="notepad-textarea"
+          placeholder="Type your note here…"
+        ></textarea>
+        <div class="notepad-actions">
+          <span class="notepad-target" id="notepadTarget"></span>
+          <button class="btn-primary" id="saveNoteBtn">Save note</button>
+        </div>
       </div>
     </div>
 
-    <div id="notesList" class="notes-list"></div>
-
-    <div id="pagination" class="pagination" style="display: none"></div>
+    <div class="tab-panel" id="panel-typed">
+      <div id="typedNotesList" class="typed-list"></div>
+    </div>
 
     <div class="footer">
       <div class="footer-stat" id="storageText">0 KB</div>

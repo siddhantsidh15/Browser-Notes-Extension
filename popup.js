@@ -11,6 +11,13 @@ const toast = document.getElementById("toast");
 const caseSensitiveBtn = document.getElementById("caseSensitiveBtn");
 const copyAllBtn = document.getElementById("copyAllBtn");
 
+const tabBtns = document.querySelectorAll(".tab-btn");
+const tabPanels = document.querySelectorAll(".tab-panel");
+const notepadTextarea = document.getElementById("notepadTextarea");
+const notepadTarget = document.getElementById("notepadTarget");
+const saveNoteBtn = document.getElementById("saveNoteBtn");
+const typedNotesList = document.getElementById("typedNotesList");
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let allNotes = [];
 let currentFilteredNotes = [];
@@ -18,6 +25,8 @@ let currentPage = 1;
 const PER_PAGE = 10;
 let isDark = true;
 let isCaseSensitive = false;
+let allTypedNotes = [];
+let activeTabInfo = null; // { url, title, domain } of the page focused when popup opened
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 const COPY_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
@@ -47,6 +56,54 @@ function esc(str = "") {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+// ── Markdown (Notepad) ───────────────────────────────────────────────────────
+// Central place for typed-note formatting rules. Add new rules to the `rules`
+// array to extend supported syntax — each rule runs in order against
+// already-HTML-escaped text, so replacement strings may safely contain tags.
+const Markdown = {
+  rules: [
+    // Fenced code block: ```code``` (checked first so headings/underline
+    // inside a code block aren't also transformed)
+    {
+      name: "codeBlock",
+      pattern: /```([\s\S]*?)```/g,
+      render: (_match, code) => `<pre class="md-code"><code>${code}</code></pre>`,
+    },
+    // Headings — order matters: longest marker first so "### x" isn't
+    // partially matched by the "##" or "#" rule.
+    {
+      name: "h1",
+      pattern: /^###[ \t]+(.+)$/gm,
+      render: (_match, text) => `<h1>${text}</h1>`,
+    },
+    {
+      name: "h2",
+      pattern: /^##[ \t]+(.+)$/gm,
+      render: (_match, text) => `<h2>${text}</h2>`,
+    },
+    {
+      name: "h3",
+      pattern: /^#[ \t]+(.+)$/gm,
+      render: (_match, text) => `<h3>${text}</h3>`,
+    },
+    // :text: → underline
+    {
+      name: "underline",
+      pattern: /:([^:\n]+):/g,
+      render: (_match, text) => `<u>${text}</u>`,
+    },
+  ],
+
+  // Converts raw typed-note text into safe HTML.
+  render(rawText) {
+    let html = esc(rawText || "");
+    for (const rule of this.rules) {
+      html = html.replace(rule.pattern, (...args) => rule.render(...args));
+    }
+    return html;
+  },
+};
 
 function faviconUrl(domain) {
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
@@ -399,9 +456,161 @@ function updateStorage() {
   });
 }
 
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(tabName) {
+  tabBtns.forEach((btn) =>
+    btn.classList.toggle("active", btn.dataset.tab === tabName)
+  );
+  tabPanels.forEach((panel) =>
+    panel.classList.toggle("active", panel.id === `panel-${tabName}`)
+  );
+  if (tabName === "typed") loadTypedNotes();
+}
+
+tabBtns.forEach((btn) => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+
+// ── Notepad (Tab 2) ───────────────────────────────────────────────────────────
+// Finds the page that was focused in the browser when the popup was opened —
+// that's "the website the note was taken from".
+async function detectActiveTab() {
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (!tab) return null;
+    return {
+      url: tab.url || "",
+      title: tab.title || "",
+      domain: getDomain(tab.url || ""),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function renderNotepadTarget() {
+  if (!notepadTarget) return;
+  notepadTarget.textContent = activeTabInfo?.domain
+    ? `saving from ${activeTabInfo.domain}`
+    : "";
+}
+
+if (saveNoteBtn) {
+  saveNoteBtn.addEventListener("click", async () => {
+    const text = notepadTextarea.value.trim();
+    if (!text) {
+      showToast("Nothing to save");
+      return;
+    }
+
+    saveNoteBtn.disabled = true;
+    // Re-detect in case the user switched tabs/windows while typing.
+    const target = (await detectActiveTab()) || activeTabInfo;
+
+    const note = {
+      id: Date.now(),
+      text,
+      url: target?.url || "",
+      title: target?.title || "",
+      domain: target?.domain || "",
+      timestamp: new Date().toISOString(),
+    };
+
+    chrome.runtime.sendMessage(
+      { action: "saveTypedNote", note },
+      (response) => {
+        saveNoteBtn.disabled = false;
+        if (response?.success) {
+          notepadTextarea.value = "";
+          showToast("Note saved");
+          if (document.getElementById("panel-typed")?.classList.contains("active")) {
+            loadTypedNotes();
+          }
+        } else {
+          showToast("Save failed");
+        }
+      }
+    );
+  });
+}
+
+// ── Typed Notes (Tab 3) ──────────────────────────────────────────────────────
+function renderTypedNotes(notes) {
+  if (!typedNotesList) return;
+
+  if (notes.length === 0) {
+    typedNotesList.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">✎</div>
+        <div class="empty-text">No typed notes yet.</div>
+      </div>`;
+    return;
+  }
+
+  const grouped = groupNotes(notes);
+  let html = "";
+
+  for (const group of grouped) {
+    html += `<div class="date-group">
+      <div class="date-heading">${formatDateHeading(group.dateKey)}</div>`;
+
+    for (const { domain, notes: domainNotes } of group.domains) {
+      html += `<div class="domain-row">
+        <img class="domain-favicon" src="${faviconUrl(domain)}" alt="" />
+        <span class="domain-label">${esc(domain)}</span>
+      </div>`;
+
+      for (const note of domainNotes) {
+        const time = new Date(note.timestamp).toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        html += `
+        <div class="note-card" data-id="${note.id}">
+          <div class="note-top">
+            <span class="note-time">${time}</span>
+            <a class="note-source" href="${esc(note.url)}" target="_blank">source ↗</a>
+          </div>
+          <div class="md-content">${Markdown.render(note.text)}</div>
+          <div class="note-actions">
+            <button class="card-btn del typed-delete-btn" data-id="${note.id}" title="Delete">${DEL_SVG}</button>
+          </div>
+        </div>`;
+      }
+    }
+    html += `</div>`;
+  }
+
+  typedNotesList.innerHTML = html;
+
+  typedNotesList.querySelectorAll(".typed-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = parseInt(btn.dataset.id);
+      chrome.runtime.sendMessage({ action: "deleteTypedNote", id }, () => {
+        loadTypedNotes();
+        showToast("deleted");
+      });
+    });
+  });
+}
+
+function loadTypedNotes() {
+  chrome.runtime.sendMessage({ action: "getTypedNotes" }, (response) => {
+    allTypedNotes = (response?.notes || []).slice().reverse();
+    renderTypedNotes(allTypedNotes);
+    updateStorage();
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
   const prefs = await loadPrefs();
   applyTheme(prefs.theme !== "light");
   loadNotes();
+  activeTabInfo = await detectActiveTab();
+  renderNotepadTarget();
 })();
