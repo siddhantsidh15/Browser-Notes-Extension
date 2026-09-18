@@ -867,6 +867,326 @@
         opacity: 0.3;
         cursor: not-allowed;
       }
+
+      /* ═══════════════════════════════════════════════════════════
+         TABS
+      ═══════════════════════════════════════════════════════════ */
+      .view-tabs {
+        display: flex;
+        background: var(--topbar-bg);
+        border-bottom: 2px solid var(--topbar-border);
+        padding: 0 28px;
+      }
+
+      .view-tab-btn {
+        background: none;
+        border: none;
+        border-bottom: 3px solid transparent;
+        padding: 14px 22px 11px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: var(--topbar-muted);
+        cursor: pointer;
+        transition: all 0.15s;
+        margin-bottom: -2px;
+      }
+
+      .view-tab-btn:hover {
+        color: var(--topbar-text);
+      }
+
+      .view-tab-btn.active {
+        color: var(--accent2);
+        border-bottom-color: var(--accent2);
+      }
+
+      .view-panel {
+        display: none;
+      }
+
+      .view-panel.active {
+        display: block;
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         NOTEPAD PANEL
+      ═══════════════════════════════════════════════════════════ */
+      .notepad-container {
+        max-width: 860px;
+        margin: 40px auto 80px;
+        padding: 0 28px;
+      }
+
+      .notepad-title {
+        font-family: "Playfair Display", serif;
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--ink);
+        margin-bottom: 10px;
+      }
+
+      .notepad-hint {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        color: var(--text-muted);
+        line-height: 1.85;
+        margin-bottom: 16px;
+      }
+
+      .notepad-hint code {
+        background: var(--bg2);
+        border: 1px solid var(--rule);
+        border-radius: 3px;
+        padding: 0 5px;
+        color: var(--text);
+      }
+
+      .notepad-textarea {
+        width: 100%;
+        min-height: 340px;
+        resize: vertical;
+        background: var(--surface);
+        border: 1.5px solid var(--rule);
+        border-radius: 8px;
+        color: var(--text);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        line-height: 1.65;
+        padding: 16px 18px;
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s, background 0.25s;
+        box-shadow: 0 2px 12px var(--shadow);
+      }
+
+      .notepad-textarea:focus {
+        border-color: var(--accent2);
+        box-shadow: 0 0 0 3px rgba(142, 68, 173, 0.12);
+      }
+
+      .notepad-textarea::placeholder {
+        color: var(--text-muted);
+      }
+
+      .notepad-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 14px;
+      }
+
+      .notepad-target {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 60%;
+      }
+
+      .btn-save-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 24px;
+        border-radius: var(--radius);
+        border: none;
+        background: var(--accent2);
+        color: #fff;
+        font-family: "Lato", sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        letter-spacing: 0.3px;
+        transition: opacity 0.15s, transform 0.1s;
+      }
+
+      .btn-save-note:hover { opacity: 0.87; }
+      .btn-save-note:active { transform: scale(0.97); }
+      .btn-save-note:disabled { opacity: 0.4; cursor: not-allowed; }
+
+      /* ═══════════════════════════════════════════════════════════
+         TYPED NOTES PANEL
+      ═══════════════════════════════════════════════════════════ */
+      .typed-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 28px 28px 80px;
+      }
+
+      .typed-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .typed-title {
+        font-family: "Playfair Display", serif;
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+
+      .btn-clear-typed {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--rule);
+        padding: 6px 14px;
+        border-radius: var(--radius);
+        font-family: "Lato", sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+      }
+
+      .btn-clear-typed:hover { color: #f76a6a; border-color: #f76a6a; }
+
+      .typed-pages-wrap {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 32px var(--shadow);
+      }
+
+      .typed-page-col {
+        padding: 32px 28px;
+        background: var(--surface);
+        min-height: 400px;
+        transition: background 0.25s;
+      }
+
+      .typed-page-col:first-child {
+        border-right: 2px solid var(--rule);
+        position: relative;
+      }
+
+      .typed-page-col:first-child::after {
+        content: "";
+        position: absolute;
+        top: 0; right: -6px; bottom: 0;
+        width: 10px;
+        background: linear-gradient(to right, rgba(0,0,0,0.04) 0%, transparent 100%);
+        pointer-events: none;
+      }
+
+      .typed-note-body {
+        border-left: 3px solid var(--accent2);
+        background: var(--quote-bg);
+        border-radius: 0 4px 4px 0;
+        padding: 12px 14px;
+        margin-top: 9px;
+        transition: background 0.25s;
+      }
+
+      /* ── Markdown content ── */
+      .md-content {
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--text);
+        white-space: pre-wrap;
+        word-break: break-word;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+
+      .md-content h1 {
+        font-family: "Playfair Display", serif;
+        font-weight: 700;
+        font-size: 20px;
+        line-height: 1.3;
+        margin: 4px 0 6px;
+        color: var(--ink);
+      }
+
+      .md-content h2 {
+        font-family: "Playfair Display", serif;
+        font-weight: 700;
+        font-size: 17px;
+        line-height: 1.3;
+        margin: 4px 0 5px;
+        color: var(--ink);
+      }
+
+      .md-content h3 {
+        font-family: "Lato", sans-serif;
+        font-weight: 700;
+        font-size: 14px;
+        line-height: 1.3;
+        margin: 3px 0 4px;
+      }
+
+      .md-content u { text-decoration: underline; }
+
+      .md-content pre.md-code {
+        background: var(--bg2);
+        border: 1px solid var(--rule);
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin: 6px 0;
+        overflow-x: auto;
+        white-space: pre;
+      }
+
+      .md-content pre.md-code code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        color: var(--text);
+      }
+
+      .typed-note-delete {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--delete-color);
+        font-size: 15px;
+        line-height: 1;
+        padding: 3px 6px;
+        border-radius: 4px;
+        opacity: 0;
+        transition: opacity 0.15s, color 0.15s;
+      }
+
+      .note-card:hover .typed-note-delete { opacity: 1; }
+      .typed-note-delete:hover { color: var(--accent); }
+
+      .typed-empty-state {
+        text-align: center;
+        padding: 80px 40px;
+        color: var(--text-muted);
+        grid-column: 1 / -1;
+      }
+
+      .typed-empty-state .big-icon {
+        font-size: 52px;
+        margin-bottom: 18px;
+        opacity: 0.4;
+      }
+
+      .typed-empty-state h2 {
+        font-family: "Playfair Display", serif;
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--ink);
+        margin-bottom: 10px;
+      }
+
+      .typed-empty-state p {
+        font-size: 14px;
+        line-height: 1.7;
+      }
     </style>
   </head>
   <body>
@@ -911,43 +1231,89 @@
       </div>
     </div>
 
-    <!-- ── Search + page info ────────────────────────────── -->
-    <div class="toolbar">
-      <div class="search-container">
-        <input
-          class="search-input"
-          id="searchInput"
-          type="text"
-          placeholder="Search notes, sources, or domains…"
-        />
-        <div class="search-actions">
-          <button
-            class="search-action-btn"
-            id="caseSensitiveBtn"
-            title="Match Case (Aa)"
-          >
-            Aa
-          </button>
-          <button
-            class="search-action-btn"
-            id="copyAllBtn"
-            title="Copy All Filtered Notes"
-          ></button>
+    <!-- ── View Tabs ─────────────────────────────────────── -->
+    <div class="view-tabs">
+      <button class="view-tab-btn active" data-view="notes">Notes</button>
+      <button class="view-tab-btn" data-view="notepad">Notepad</button>
+      <button class="view-tab-btn" data-view="typed">Typed</button>
+    </div>
+
+    <!-- ── PANEL: Notes ──────────────────────────────────── -->
+    <div class="view-panel active" id="view-notes">
+      <!-- ── Search + page info ── -->
+      <div class="toolbar">
+        <div class="search-container">
+          <input
+            class="search-input"
+            id="searchInput"
+            type="text"
+            placeholder="Search notes, sources, or domains…"
+          />
+          <div class="search-actions">
+            <button
+              class="search-action-btn"
+              id="caseSensitiveBtn"
+              title="Match Case (Aa)"
+            >
+              Aa
+            </button>
+            <button
+              class="search-action-btn"
+              id="copyAllBtn"
+              title="Copy All Filtered Notes"
+            ></button>
+          </div>
+        </div>
+        <span class="page-info" id="pageInfo"></span>
+      </div>
+
+      <!-- ── Notes pages ── -->
+      <div class="page-container">
+        <div class="pages-wrap" id="pagesWrap">
+          <div class="page-col left-col" id="leftCol"></div>
+          <div class="page-col right-col" id="rightCol"></div>
         </div>
       </div>
-      <span class="page-info" id="pageInfo"></span>
+
+      <!-- ── Pagination ── -->
+      <div class="pagination" id="pagination"></div>
     </div>
 
-    <!-- ── Notes pages ───────────────────────────────────── -->
-    <div class="page-container">
-      <div class="pages-wrap" id="pagesWrap">
-        <div class="page-col left-col" id="leftCol"></div>
-        <div class="page-col right-col" id="rightCol"></div>
+    <!-- ── PANEL: Notepad ────────────────────────────────── -->
+    <div class="view-panel" id="view-notepad">
+      <div class="notepad-container">
+        <h2 class="notepad-title">✎ Notepad</h2>
+        <div class="notepad-hint">
+          <code># text</code> → small heading ·
+          <code>## text</code> → medium heading ·
+          <code>### text</code> → large heading ·
+          <code>:text:</code> → underline · triple-backtick fenced text → code block
+        </div>
+        <textarea
+          id="notepadTextarea"
+          class="notepad-textarea"
+          placeholder="Type your note here…"
+        ></textarea>
+        <div class="notepad-actions">
+          <span class="notepad-target" id="notepadTarget"></span>
+          <button class="btn-save-note" id="saveNoteBtn">Save note</button>
+        </div>
       </div>
     </div>
 
-    <!-- ── Pagination ────────────────────────────────────── -->
-    <div class="pagination" id="pagination"></div>
+    <!-- ── PANEL: Typed Notes ────────────────────────────── -->
+    <div class="view-panel" id="view-typed">
+      <div class="typed-container">
+        <div class="typed-header">
+          <span class="typed-title">📝 Typed Notes</span>
+          <button class="btn-clear-typed" id="clearTypedBtn">✕ Clear All Typed</button>
+        </div>
+        <div class="typed-pages-wrap" id="typedPagesWrap">
+          <div class="typed-page-col" id="typedLeftCol"></div>
+          <div class="typed-page-col" id="typedRightCol"></div>
+        </div>
+      </div>
+    </div>
 
     <div id="toast"></div>
     <script src="notes.js"></script>

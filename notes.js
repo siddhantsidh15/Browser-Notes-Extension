@@ -1,4 +1,5 @@
-// notes.js — full-page notes viewer with pagination, double/single layout, dark/light theme
+// notes.js — full-page notes viewer with pagination, double/single layout,
+// dark/light theme, and three-panel tabs: Notes | Notepad | Typed
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const leftCol = document.getElementById("leftCol");
@@ -18,6 +19,9 @@ const layoutToggle = document.getElementById("layoutToggle");
 let allNotes = [];
 let currentPage = 1;
 const PER_PAGE = 20;
+let isCaseSensitive = false;
+let currentFilteredNotes = [];
+let allTypedNotes = [];
 
 // ── Persist preferences in chrome.storage.local ───────────────────────────────
 async function loadPrefs() {
@@ -33,13 +37,9 @@ async function savePrefs(patch) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getDateKey(isoTimestamp) {
   const d = new Date(isoTimestamp);
-
-  // Extract local year, month, and day
   const y = d.getFullYear();
-  // Months are 0-indexed in JS, so we add 1. padStart ensures "5" becomes "05"
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
-
   return `${y}-${m}-${day}`;
 }
 
@@ -92,13 +92,59 @@ function showToast(msg, dur = 2500) {
   setTimeout(() => toast.classList.remove("show"), dur);
 }
 
+function debounce(fn, delay) {
+  let timer;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+// ── Markdown renderer ─────────────────────────────────────────────────────────
+const Markdown = {
+  rules: [
+    {
+      name: "codeBlock",
+      pattern: /```([\s\S]*?)```/g,
+      render: (_match, code) => `<pre class="md-code"><code>${code}</code></pre>`,
+    },
+    {
+      name: "h1",
+      pattern: /^###[ \t]+(.+)$/gm,
+      render: (_match, text) => `<h1>${text}</h1>`,
+    },
+    {
+      name: "h2",
+      pattern: /^##[ \t]+(.+)$/gm,
+      render: (_match, text) => `<h2>${text}</h2>`,
+    },
+    {
+      name: "h3",
+      pattern: /^#[ \t]+(.+)$/gm,
+      render: (_match, text) => `<h3>${text}</h3>`,
+    },
+    {
+      name: "underline",
+      pattern: /:([^:\n]+):/g,
+      render: (_match, text) => `<u>${text}</u>`,
+    },
+  ],
+
+  render(rawText) {
+    let html = esc(rawText || "");
+    for (const rule of this.rules) {
+      html = html.replace(rule.pattern, (...args) => rule.render(...args));
+    }
+    return html;
+  },
+};
+
 // ── Grouping ──────────────────────────────────────────────────────────────────
-// Returns: [ { dateKey, domains: [ { domain, notes:[] } ] } ] sorted newest first
 function groupNotes(notes) {
   const map = {};
   for (const note of notes) {
     const dk = getDateKey(note.timestamp);
-    const domain = note.domain || getDomain(note.url);
+    const domain = note.domain || getDomain(note.url || "");
     if (!map[dk]) map[dk] = {};
     if (!map[dk][domain]) map[dk][domain] = [];
     map[dk][domain].push(note);
@@ -115,14 +161,13 @@ function groupNotes(notes) {
     }));
 }
 
-// ── Build HTML for one note card ──────────────────────────────────────────────
+// ── Build HTML for one saved note card ───────────────────────────────────────
 function noteCardHTML(note, idx) {
   const paragraphs = note.text
     .split(/\n{2,}/)
     .map((p) => `<p>${esc(p.trim())}</p>`)
     .join("");
 
-  // Calculate copy dot states
   const count = note.copyCount || 0;
   const d1 = count >= 1 ? "active" : "";
   const d2 = count >= 2 ? "active" : "";
@@ -152,7 +197,7 @@ function noteCardHTML(note, idx) {
   </div>`;
 }
 
-// ── Build HTML for a full date→domain group ───────────────────────────────────
+// ── Build HTML for a date→domain group ───────────────────────────────────────
 function dateBlockHTML(group, animDelay) {
   const totalNotes = group.domains.reduce((s, d) => s + d.notes.length, 0);
   let html = `
@@ -167,14 +212,11 @@ function dateBlockHTML(group, animDelay) {
     html += `
     <div class="domain-block">
       <div class="domain-heading">
-        <img class="domain-favicon" src="${faviconUrl(domain)}" alt=""
-               data-favicon="1"/>
+        <img class="domain-favicon" src="${faviconUrl(domain)}" alt="" data-favicon="1"/>
         <span class="domain-name">${esc(domain)}</span>
         <span class="domain-note-count">· ${notes.length} note${notes.length !== 1 ? "s" : ""}</span>
       </div>`;
-    notes.forEach((note, i) => {
-      html += noteCardHTML(note, i);
-    });
+    notes.forEach((note, i) => { html += noteCardHTML(note, i); });
     html += `</div>`; // domain-block
   }
   html += `</div>`; // date-block
@@ -182,31 +224,27 @@ function dateBlockHTML(group, animDelay) {
 }
 
 // ── Pagination helpers ────────────────────────────────────────────────────────
-// Paginate over a flat list of notes; each page = up to PER_PAGE notes.
-// Then re-group the page's notes for display.
-function getPageNotes(filtered) {
+function getPageNotes() {
   const start = (currentPage - 1) * PER_PAGE;
   return currentFilteredNotes.slice(start, start + PER_PAGE);
 }
 
-function totalPages(filtered) {
+function totalPages() {
   return Math.max(1, Math.ceil(currentFilteredNotes.length / PER_PAGE));
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
+// ── Render saved notes ────────────────────────────────────────────────────────
 function render(filtered) {
   const total = allNotes.length;
   const fTotal = filtered.length;
-  const pages = totalPages(filtered);
+  const pages = totalPages();
   const isDouble = document.documentElement.dataset.layout === "double";
 
   topbarStats.textContent =
     total === 0 ? "" : `${total} note${total !== 1 ? "s" : ""}`;
 
-  // Clamp currentPage
   if (currentPage > pages) currentPage = pages;
 
-  // Empty state — put in leftCol spanning both
   if (fTotal === 0) {
     const q = searchInput.value.trim();
     leftCol.innerHTML = `
@@ -226,35 +264,19 @@ function render(filtered) {
     return;
   }
 
-  // Slice notes for current page
-  const pageNotes = getPageNotes(filtered);
-
-  // Page info
+  const pageNotes = getPageNotes();
   const startN = (currentPage - 1) * PER_PAGE + 1;
   const endN = Math.min(currentPage * PER_PAGE, fTotal);
   pageInfo.textContent = `${startN}–${endN} of ${fTotal} note${fTotal !== 1 ? "s" : ""}`;
 
   if (isDouble) {
-    // FIX: Split the 20 individual notes directly down the middle first
     const leftNotes = pageNotes.slice(0, PER_PAGE / 2);
     const rightNotes = pageNotes.slice(PER_PAGE / 2, PER_PAGE);
-
-    // Then group them separately so the layout engines processes them per-column
-    const leftGrouped = groupNotes(leftNotes);
-    const rightGrouped = groupNotes(rightNotes);
-
-    leftCol.innerHTML = leftGrouped
-      .map((g, i) => dateBlockHTML(g, i * 0.06))
-      .join("");
-    rightCol.innerHTML = rightGrouped.length
-      ? rightGrouped.map((g, i) => dateBlockHTML(g, i * 0.06)).join("")
-      : "";
+    leftCol.innerHTML = groupNotes(leftNotes).map((g, i) => dateBlockHTML(g, i * 0.06)).join("");
+    const rg = groupNotes(rightNotes);
+    rightCol.innerHTML = rg.length ? rg.map((g, i) => dateBlockHTML(g, i * 0.06)).join("") : "";
   } else {
-    // Single page mode: group all 20 together
-    const grouped = groupNotes(pageNotes);
-    leftCol.innerHTML = grouped
-      .map((g, i) => dateBlockHTML(g, i * 0.06))
-      .join("");
+    leftCol.innerHTML = groupNotes(pageNotes).map((g, i) => dateBlockHTML(g, i * 0.06)).join("");
     rightCol.innerHTML = "";
   }
 
@@ -269,54 +291,38 @@ function render(filtered) {
     });
   });
 
+  // Attach copy handlers
   document.querySelectorAll(".note-copy").forEach((btn) => {
     btn.addEventListener("click", () => {
-      // Find the specific note by its ID
       const id = parseInt(btn.dataset.id);
       const noteToCopy = allNotes.find((n) => n.id === id);
+      if (!noteToCopy) return;
 
-      if (noteToCopy) {
-        // Use the browser's Clipboard API to copy the pure text
-        navigator.clipboard
-          .writeText(noteToCopy.text)
-          .then(() => {
-            showToast("📋 Copied to clipboard!");
+      navigator.clipboard.writeText(noteToCopy.text).then(() => {
+        showToast("📋 Copied to clipboard!");
+        noteToCopy.copyCount = (noteToCopy.copyCount || 0) + 1;
 
-            // 1. Increment the copy counter in memory
-            noteToCopy.copyCount = (noteToCopy.copyCount || 0) + 1;
+        const card = document.querySelector(`.note-card[data-id="${id}"]`);
+        if (card) {
+          const dots = card.querySelectorAll(".copy-dot");
+          if (noteToCopy.copyCount >= 1 && dots[0]) dots[0].classList.add("active");
+          if (noteToCopy.copyCount >= 2 && dots[1]) dots[1].classList.add("active");
+          if (noteToCopy.copyCount >= 3 && dots[2]) dots[2].classList.add("active");
+          card.querySelector(".copy-indicators").title = `Copied ${noteToCopy.copyCount} times`;
+        }
 
-            // 2. Update the UI immediately without re-rendering the whole page
-            const card = document.querySelector(`.note-card[data-id="${id}"]`);
-            if (card) {
-              const dots = card.querySelectorAll(".copy-dot");
-              if (noteToCopy.copyCount >= 1 && dots[0])
-                dots[0].classList.add("active");
-              if (noteToCopy.copyCount >= 2 && dots[1])
-                dots[1].classList.add("active");
-              if (noteToCopy.copyCount >= 3 && dots[2])
-                dots[2].classList.add("active");
-              card.querySelector(".copy-indicators").title =
-                `Copied ${noteToCopy.copyCount} times`;
-            }
-
-            // 3. Save the updated copy count permanently to Chrome Storage
-            chrome.storage.local.get(["notes"], (res) => {
-              const dbNotes = res.notes || [];
-              const dbNote = dbNotes.find((n) => n.id === id);
-              if (dbNote) {
-                dbNote.copyCount = noteToCopy.copyCount;
-                chrome.storage.local.set({ notes: dbNotes });
-              }
-            });
-          })
-          .catch((err) => {
-            showToast("❌ Failed to copy");
-          });
-      }
+        chrome.storage.local.get(["notes"], (res) => {
+          const dbNotes = res.notes || [];
+          const dbNote = dbNotes.find((n) => n.id === id);
+          if (dbNote) {
+            dbNote.copyCount = noteToCopy.copyCount;
+            chrome.storage.local.set({ notes: dbNotes });
+          }
+        });
+      }).catch(() => showToast("❌ Failed to copy"));
     });
   });
 
-  // Pagination bar
   renderPagination(pages);
 }
 
@@ -336,18 +342,13 @@ function renderPagination(pages) {
 
   let html = makeBtn("←", currentPage - 1, currentPage === 1);
 
-  // Show at most 7 page buttons with ellipsis
   const range = [];
   if (pages <= 7) {
     for (let i = 1; i <= pages; i++) range.push(i);
   } else {
     range.push(1);
     if (currentPage > 3) range.push("…");
-    for (
-      let i = Math.max(2, currentPage - 1);
-      i <= Math.min(pages - 1, currentPage + 1);
-      i++
-    )
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(pages - 1, currentPage + 1); i++)
       range.push(i);
     if (currentPage < pages - 2) range.push("…");
     range.push(pages);
@@ -370,32 +371,23 @@ function renderPagination(pages) {
   });
 }
 
+// ── Search ────────────────────────────────────────────────────────────────────
 const caseSensitiveBtn = document.getElementById("caseSensitiveBtn");
 const copyAllBtn = document.getElementById("copyAllBtn");
 
-// ── State ─────────────────────────────────────────────────────────────────────
-// (Keep your existing state references, and append these two below)
-let isCaseSensitive = false;
-let currentFilteredNotes = [];
-
-// Clean programmatic inject of standard SVG Copy structure
 if (copyAllBtn) {
   copyAllBtn.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
     </svg>`;
-  copyAllBtn.disabled = true; // Initialize disabled when search is blank
+  copyAllBtn.disabled = true;
 }
 
-// ── Filter + render ───────────────────────────────────────────────────────────
 function filterAndRender() {
   const query = searchInput.value.trim();
 
-  // Handle the Copy All button state based on search query presence
-  if (copyAllBtn) {
-    copyAllBtn.disabled = query === "";
-  }
+  if (copyAllBtn) copyAllBtn.disabled = query === "";
 
   currentFilteredNotes = query
     ? allNotes.filter((n) => {
@@ -403,22 +395,11 @@ function filterAndRender() {
         const title = n.title || "";
         const domain = n.domain || "";
         const url = n.url || "";
-
         if (isCaseSensitive) {
-          return (
-            text.includes(query) ||
-            title.includes(query) ||
-            domain.includes(query) ||
-            url.includes(query)
-          );
+          return text.includes(query) || title.includes(query) || domain.includes(query) || url.includes(query);
         } else {
           const q = query.toLowerCase();
-          return (
-            text.toLowerCase().includes(q) ||
-            title.toLowerCase().includes(q) ||
-            domain.toLowerCase().includes(q) ||
-            url.toLowerCase().includes(q)
-          );
+          return text.toLowerCase().includes(q) || title.toLowerCase().includes(q) || domain.toLowerCase().includes(q) || url.toLowerCase().includes(q);
         }
       })
     : allNotes;
@@ -426,25 +407,13 @@ function filterAndRender() {
   render(currentFilteredNotes);
 }
 
-// ── Search Action Handlers ────────────────────────────────────────────────────
 if (copyAllBtn) {
   copyAllBtn.addEventListener("click", () => {
-    if (currentFilteredNotes.length === 0) {
-      showToast("❌ No notes to copy");
-      return;
-    }
-
-    // Concatenate only the plain text body contents without headings or dates
+    if (currentFilteredNotes.length === 0) { showToast("❌ No notes to copy"); return; }
     const textDump = currentFilteredNotes.map((n) => n.text).join("\n\n");
-
-    navigator.clipboard
-      .writeText(textDump)
-      .then(() => {
-        showToast(`📋 Copied ${currentFilteredNotes.length} notes!`);
-      })
-      .catch(() => {
-        showToast("❌ Failed to copy notes");
-      });
+    navigator.clipboard.writeText(textDump)
+      .then(() => showToast(`📋 Copied ${currentFilteredNotes.length} notes!`))
+      .catch(() => showToast("❌ Failed to copy notes"));
   });
 }
 
@@ -457,6 +426,9 @@ if (caseSensitiveBtn) {
   });
 }
 
+searchInput.addEventListener("input", debounce(() => { currentPage = 1; filterAndRender(); }, 200));
+
+// ── Load saved notes ──────────────────────────────────────────────────────────
 function loadNotes() {
   chrome.runtime.sendMessage({ action: "getNotes" }, (response) => {
     allNotes = (response?.notes || []).reverse();
@@ -481,7 +453,7 @@ themeToggle.addEventListener("change", () => {
 function applyLayout(double_) {
   document.documentElement.dataset.layout = double_ ? "double" : "single";
   layoutToggle.checked = double_;
-  filterAndRender(); // re-split columns
+  filterAndRender();
 }
 
 layoutToggle.addEventListener("change", () => {
@@ -490,30 +462,12 @@ layoutToggle.addEventListener("change", () => {
   savePrefs({ layout: double_ ? "double" : "single" });
 });
 
-function debounce(fn, delay) {
-  let timer;
-  return function (...args) {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn.apply(this, args), delay);
-  };
-}
-
-// ── Other events ──────────────────────────────────────────────────────────────
-searchInput.addEventListener(
-  "input",
-  debounce(() => {
-    currentPage = 1;
-    filterAndRender();
-  }, 200)
-);
-
+// ── Export / Clear ────────────────────────────────────────────────────────────
 exportBtn.addEventListener("click", () => {
   chrome.runtime.sendMessage({ action: "exportNotes" });
   showToast("📄 Exported as .md file!");
   exportBtn.textContent = "✓ Exported!";
-  setTimeout(() => {
-    exportBtn.textContent = "⬇ Export .md";
-  }, 2200);
+  setTimeout(() => { exportBtn.textContent = "⬇ Export .md"; }, 2200);
 });
 
 clearBtn.addEventListener("click", () => {
@@ -527,37 +481,21 @@ clearBtn.addEventListener("click", () => {
   }
 });
 
-// Auto-refresh when a new note is saved
+// Auto-refresh when a new note is saved from context menu
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === "refreshNotes") loadNotes();
 });
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-(async () => {
-  const prefs = await loadPrefs();
-
-  // Apply saved theme (default light)
-  applyTheme(prefs.theme === "dark");
-
-  // Apply saved layout (default double)
-  applyLayout(prefs.layout !== "single"); // double unless explicitly "single"
-
-  loadNotes();
-})();
-
-// ── Storage usage display ──────────────────────────────────────────────────────
+// ── Storage indicator ─────────────────────────────────────────────────────────
 function updateStorageIndicator() {
   chrome.storage.local.getBytesInUse(null, (bytesUsed) => {
     if (chrome.runtime.lastError || bytesUsed === undefined) return;
-
     const kb = bytesUsed / 1024;
     const mb = kb / 1024;
-    const LIMIT_MB = 10; // default cap (unlimitedStorage removes this, but useful reference)
+    const LIMIT_MB = 10;
 
-    let label,
-      cls = "";
+    let label, cls = "";
     if (mb >= 1) {
-      const pct = ((mb / LIMIT_MB) * 100).toFixed(0);
       label = `💾 ${mb.toFixed(2)} MB used`;
       if (mb > LIMIT_MB * 0.8) cls = "alert";
       else if (mb > LIMIT_MB * 0.5) cls = "warn";
@@ -569,3 +507,170 @@ function updateStorageIndicator() {
     storageIndicator.className = "storage-indicator" + (cls ? ` ${cls}` : "");
   });
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  VIEW TABS — Notes | Notepad | Typed
+// ═════════════════════════════════════════════════════════════════════════════
+const viewTabBtns = document.querySelectorAll(".view-tab-btn");
+const viewPanels = document.querySelectorAll(".view-panel");
+
+function switchView(viewName) {
+  viewTabBtns.forEach((btn) =>
+    btn.classList.toggle("active", btn.dataset.view === viewName)
+  );
+  viewPanels.forEach((panel) =>
+    panel.classList.toggle("active", panel.id === `view-${viewName}`)
+  );
+  if (viewName === "typed") loadTypedNotes();
+}
+
+viewTabBtns.forEach((btn) => {
+  btn.addEventListener("click", () => switchView(btn.dataset.view));
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  NOTEPAD
+// ═════════════════════════════════════════════════════════════════════════════
+const notepadTextarea = document.getElementById("notepadTextarea");
+const notepadTarget = document.getElementById("notepadTarget");
+const saveNoteBtn = document.getElementById("saveNoteBtn");
+
+// notes.html is a full-page tab — no active-browser-tab context, leave target blank
+if (notepadTarget) notepadTarget.textContent = "";
+
+if (saveNoteBtn) {
+  saveNoteBtn.addEventListener("click", () => {
+    const text = notepadTextarea.value.trim();
+    if (!text) { showToast("Nothing to save"); return; }
+
+    saveNoteBtn.disabled = true;
+
+    const note = {
+      id: Date.now(),
+      text,
+      url: "",
+      title: "",
+      domain: "",
+      timestamp: new Date().toISOString(),
+    };
+
+    chrome.runtime.sendMessage({ action: "saveTypedNote", note }, (response) => {
+      saveNoteBtn.disabled = false;
+      if (response?.success) {
+        notepadTextarea.value = "";
+        showToast("✅ Note saved");
+        const typedPanel = document.getElementById("view-typed");
+        if (typedPanel?.classList.contains("active")) loadTypedNotes();
+      } else {
+        showToast("❌ Save failed");
+      }
+    });
+  });
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  TYPED NOTES
+// ═════════════════════════════════════════════════════════════════════════════
+const typedLeftCol = document.getElementById("typedLeftCol");
+const typedRightCol = document.getElementById("typedRightCol");
+const clearTypedBtn = document.getElementById("clearTypedBtn");
+
+function typedNoteCardHTML(note) {
+  return `
+  <div class="note-card" data-id="${note.id}">
+    <button class="typed-note-delete" data-id="${note.id}" title="Delete">✕</button>
+    <div class="note-meta-row">
+      <span class="note-time">${formatTime(note.timestamp)}</span>
+      ${note.url ? `<a class="note-source-link" href="${esc(note.url)}" target="_blank" title="${esc(note.url)}">↗ ${esc(note.title || note.url)}</a>` : ""}
+    </div>
+    <div class="typed-note-body">
+      <div class="md-content">${Markdown.render(note.text)}</div>
+    </div>
+  </div>`;
+}
+
+function buildTypedColHTML(grouped) {
+  return grouped.map((g) => {
+    const totalNotes = g.domains.reduce((s, d) => s + d.notes.length, 0);
+    let html = `<div class="date-block">
+      <div class="date-heading">
+        <span class="date-label">${formatDateHeading(g.dateKey)}</span>
+        <div class="date-rule"></div>
+        <span class="date-count">${totalNotes} note${totalNotes !== 1 ? "s" : ""}</span>
+      </div>`;
+    for (const { domain, notes: dn } of g.domains) {
+      if (domain) {
+        html += `<div class="domain-block">
+          <div class="domain-heading">
+            <img class="domain-favicon" src="${faviconUrl(domain)}" alt="" />
+            <span class="domain-name">${esc(domain)}</span>
+          </div>`;
+        dn.forEach((n) => { html += typedNoteCardHTML(n); });
+        html += `</div>`;
+      } else {
+        dn.forEach((n) => { html += typedNoteCardHTML(n); });
+      }
+    }
+    html += `</div>`;
+    return html;
+  }).join("");
+}
+
+function renderTypedNotes(notes) {
+  if (!typedLeftCol || !typedRightCol) return;
+
+  if (notes.length === 0) {
+    typedLeftCol.innerHTML = `
+      <div class="typed-empty-state">
+        <div class="big-icon">✎</div>
+        <h2>No typed notes yet</h2>
+        <p>Switch to the <strong>Notepad</strong> tab and write your first note.</p>
+      </div>`;
+    typedRightCol.innerHTML = "";
+    return;
+  }
+
+  // Split evenly across the two book-layout columns
+  const mid = Math.ceil(notes.length / 2);
+  typedLeftCol.innerHTML = buildTypedColHTML(groupNotes(notes.slice(0, mid)));
+  typedRightCol.innerHTML = buildTypedColHTML(groupNotes(notes.slice(mid)));
+
+  // Attach delete listeners
+  document.querySelectorAll(".typed-note-delete").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = parseInt(btn.dataset.id);
+      chrome.runtime.sendMessage({ action: "deleteTypedNote", id }, () => {
+        loadTypedNotes();
+        showToast("🗑 Note deleted");
+      });
+    });
+  });
+}
+
+function loadTypedNotes() {
+  chrome.runtime.sendMessage({ action: "getTypedNotes" }, (response) => {
+    allTypedNotes = (response?.notes || []).slice().reverse();
+    renderTypedNotes(allTypedNotes);
+    updateStorageIndicator();
+  });
+}
+
+if (clearTypedBtn) {
+  clearTypedBtn.addEventListener("click", () => {
+    if (confirm("Delete all typed notes permanently?")) {
+      chrome.runtime.sendMessage({ action: "clearTypedNotes" }, () => {
+        allTypedNotes = [];
+        renderTypedNotes([]);
+        showToast("🗑 All typed notes cleared");
+      });
+    }
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async () => {
+  const prefs = await loadPrefs();
+  applyTheme(prefs.theme === "dark");
+  applyLayout(prefs.layout !== "single"); // double unless explicitly "single"
+  loadNotes();
+})();
