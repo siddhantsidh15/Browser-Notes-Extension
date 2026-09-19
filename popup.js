@@ -65,11 +65,11 @@ function esc(str = "") {
 // already-HTML-escaped text, so replacement strings may safely contain tags.
 const Markdown = {
   rules: [
-    // Fenced code block: ```code``` (checked first so headings/underline
-    // inside a code block aren't also transformed)
+    // Code block: [Code]...[Code] — case-insensitive, checked first so
+    // heading / underline rules don't fire inside a code block.
     {
       name: "codeBlock",
-      pattern: /```([\s\S]*?)```/g,
+      pattern: /\[code\]([\s\S]*?)\[code\]/gi,
       render: (_match, code) =>
         `<pre class="md-code"><code>${code}</code></pre>`,
     },
@@ -483,6 +483,13 @@ function updateStorage() {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
+function focusNotepadAtEnd() {
+  if (!notepadTextarea) return;
+  notepadTextarea.focus();
+  const len = notepadTextarea.value.length;
+  notepadTextarea.selectionStart = notepadTextarea.selectionEnd = len;
+}
+
 function switchTab(tabName) {
   tabBtns.forEach((btn) =>
     btn.classList.toggle("active", btn.dataset.tab === tabName)
@@ -491,6 +498,7 @@ function switchTab(tabName) {
     panel.classList.toggle("active", panel.id === `panel-${tabName}`)
   );
   if (tabName === "typed") loadTypedNotes();
+  if (tabName === "notepad") focusNotepadAtEnd();
 }
 
 tabBtns.forEach((btn) => {
@@ -554,12 +562,63 @@ function loadDraft(callback) {
   });
 }
 
+
+
 if (notepadTextarea) {
   notepadTextarea.addEventListener("input", () => {
     updateNotepadPreview();
     saveDraft();
   });
 }
+
+// ── Auto-closing bracket pairs ────────────────────────────────────────────────
+// Works in the notepad textarea only. Behaviour:
+//  • Typing an opener  →  inserts pair, cursor lands between them.
+//  • Selecting text + typing opener  →  wraps the selection.
+//  • Typing a closer when it's already the next char  →  skip over (no double).
+const BRACKET_PAIRS = { "(": ")", "{": "}", "[": "]", "<": ">" };
+const CLOSERS = new Set(Object.values(BRACKET_PAIRS));
+
+if (notepadTextarea) {
+  notepadTextarea.addEventListener("keydown", (e) => {
+    const closer = BRACKET_PAIRS[e.key];
+
+    if (closer) {
+      // Opening bracket pressed
+      e.preventDefault();
+      const ta = notepadTextarea;
+      const start = ta.selectionStart;
+      const end   = ta.selectionEnd;
+      const val   = ta.value;
+      const hasSelection = start !== end;
+
+      if (hasSelection) {
+        // Wrap the selected text
+        ta.value = val.slice(0, start) + e.key + val.slice(start, end) + closer + val.slice(end);
+        ta.selectionStart = start + 1;
+        ta.selectionEnd   = end + 1;
+      } else {
+        // Insert pair, park cursor in the middle
+        ta.value = val.slice(0, start) + e.key + closer + val.slice(start);
+        ta.selectionStart = ta.selectionEnd = start + 1;
+      }
+      saveDraft();
+      updateNotepadPreview();
+      return;
+    }
+
+    if (CLOSERS.has(e.key)) {
+      // Closing bracket pressed — skip over if it's already the next char
+      const ta = notepadTextarea;
+      if (ta.selectionStart === ta.selectionEnd &&
+          ta.value[ta.selectionStart] === e.key) {
+        e.preventDefault();
+        ta.selectionStart = ta.selectionEnd = ta.selectionStart + 1;
+      }
+    }
+  });
+}
+
 
 // ── Insert text at the current cursor position, replacing any selection ──────
 function insertAtCursor(el, text) {
@@ -776,8 +835,10 @@ function loadTypedNotes() {
     loadDraft((draft) => {
       notepadTextarea.value = draft;
       updateNotepadPreview();
+      focusNotepadAtEnd(); // place cursor at end of restored text
     });
   } else {
     updateNotepadPreview();
+
   }
 })();
