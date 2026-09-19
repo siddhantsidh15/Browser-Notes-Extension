@@ -33,6 +33,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
+
 function getDateKey(isoTimestamp) {
   const d = new Date(isoTimestamp);
 

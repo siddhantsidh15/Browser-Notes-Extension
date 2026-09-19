@@ -440,7 +440,7 @@ searchInput.addEventListener(
 );
 
 // ── Full View ─────────────────────────────────────────────────────────────────
-openFullBtn.addEventListener("click", async () => {
+async function openFullNotesView() {
   const url = chrome.runtime.getURL("notes.html");
   const existing = await chrome.tabs.query({ url });
   if (existing.length > 0) {
@@ -450,7 +450,9 @@ openFullBtn.addEventListener("click", async () => {
     await chrome.tabs.create({ url });
   }
   window.close();
-});
+}
+
+openFullBtn.addEventListener("click", openFullNotesView);
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 function applyTheme(dark) {
@@ -533,8 +535,30 @@ function updateNotepadPreview() {
   notepadPreview.innerHTML = Markdown.render(text, draftImages);
 }
 
+// ── Draft persistence ─────────────────────────────────────────────────────────
+// Auto-save the notepad draft to chrome.storage.local on every keystroke so it
+// survives the popup being closed without saving.
+const DRAFT_KEY = "notepadDraft";
+
+function saveDraft() {
+  chrome.storage.local.set({ [DRAFT_KEY]: notepadTextarea.value });
+}
+
+function clearDraft() {
+  chrome.storage.local.remove(DRAFT_KEY);
+}
+
+function loadDraft(callback) {
+  chrome.storage.local.get([DRAFT_KEY], (result) => {
+    callback(result[DRAFT_KEY] || "");
+  });
+}
+
 if (notepadTextarea) {
-  notepadTextarea.addEventListener("input", updateNotepadPreview);
+  notepadTextarea.addEventListener("input", () => {
+    updateNotepadPreview();
+    saveDraft();
+  });
 }
 
 // ── Insert text at the current cursor position, replacing any selection ──────
@@ -616,6 +640,7 @@ if (saveNoteBtn) {
         if (response?.success) {
           notepadTextarea.value = "";
           draftImages = {};
+          clearDraft();
           updateNotepadPreview();
           showToast("Note saved");
           if (
@@ -745,5 +770,14 @@ function loadTypedNotes() {
   loadNotes();
   activeTabInfo = await detectActiveTab();
   renderNotepadTarget();
-  updateNotepadPreview();
+
+  // Restore unsaved draft so typing isn't lost when the popup closes
+  if (notepadTextarea) {
+    loadDraft((draft) => {
+      notepadTextarea.value = draft;
+      updateNotepadPreview();
+    });
+  } else {
+    updateNotepadPreview();
+  }
 })();
