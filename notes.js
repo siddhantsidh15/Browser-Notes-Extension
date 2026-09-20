@@ -106,7 +106,8 @@ const Markdown = {
     {
       name: "codeBlock",
       pattern: /```([\s\S]*?)```/g,
-      render: (_match, code) => `<pre class="md-code"><code>${code}</code></pre>`,
+      render: (_match, code) =>
+        `<pre class="md-code"><code>${code}</code></pre>`,
     },
     {
       name: "h1",
@@ -216,7 +217,9 @@ function dateBlockHTML(group, animDelay) {
         <span class="domain-name">${esc(domain)}</span>
         <span class="domain-note-count">· ${notes.length} note${notes.length !== 1 ? "s" : ""}</span>
       </div>`;
-    notes.forEach((note, i) => { html += noteCardHTML(note, i); });
+    notes.forEach((note, i) => {
+      html += noteCardHTML(note, i);
+    });
     html += `</div>`; // domain-block
   }
   html += `</div>`; // date-block
@@ -272,11 +275,17 @@ function render(filtered) {
   if (isDouble) {
     const leftNotes = pageNotes.slice(0, PER_PAGE / 2);
     const rightNotes = pageNotes.slice(PER_PAGE / 2, PER_PAGE);
-    leftCol.innerHTML = groupNotes(leftNotes).map((g, i) => dateBlockHTML(g, i * 0.06)).join("");
+    leftCol.innerHTML = groupNotes(leftNotes)
+      .map((g, i) => dateBlockHTML(g, i * 0.06))
+      .join("");
     const rg = groupNotes(rightNotes);
-    rightCol.innerHTML = rg.length ? rg.map((g, i) => dateBlockHTML(g, i * 0.06)).join("") : "";
+    rightCol.innerHTML = rg.length
+      ? rg.map((g, i) => dateBlockHTML(g, i * 0.06)).join("")
+      : "";
   } else {
-    leftCol.innerHTML = groupNotes(pageNotes).map((g, i) => dateBlockHTML(g, i * 0.06)).join("");
+    leftCol.innerHTML = groupNotes(pageNotes)
+      .map((g, i) => dateBlockHTML(g, i * 0.06))
+      .join("");
     rightCol.innerHTML = "";
   }
 
@@ -298,28 +307,35 @@ function render(filtered) {
       const noteToCopy = allNotes.find((n) => n.id === id);
       if (!noteToCopy) return;
 
-      navigator.clipboard.writeText(noteToCopy.text).then(() => {
-        showToast("📋 Copied to clipboard!");
-        noteToCopy.copyCount = (noteToCopy.copyCount || 0) + 1;
+      navigator.clipboard
+        .writeText(noteToCopy.text)
+        .then(() => {
+          showToast("📋 Copied to clipboard!");
+          noteToCopy.copyCount = (noteToCopy.copyCount || 0) + 1;
 
-        const card = document.querySelector(`.note-card[data-id="${id}"]`);
-        if (card) {
-          const dots = card.querySelectorAll(".copy-dot");
-          if (noteToCopy.copyCount >= 1 && dots[0]) dots[0].classList.add("active");
-          if (noteToCopy.copyCount >= 2 && dots[1]) dots[1].classList.add("active");
-          if (noteToCopy.copyCount >= 3 && dots[2]) dots[2].classList.add("active");
-          card.querySelector(".copy-indicators").title = `Copied ${noteToCopy.copyCount} times`;
-        }
-
-        chrome.storage.local.get(["notes"], (res) => {
-          const dbNotes = res.notes || [];
-          const dbNote = dbNotes.find((n) => n.id === id);
-          if (dbNote) {
-            dbNote.copyCount = noteToCopy.copyCount;
-            chrome.storage.local.set({ notes: dbNotes });
+          const card = document.querySelector(`.note-card[data-id="${id}"]`);
+          if (card) {
+            const dots = card.querySelectorAll(".copy-dot");
+            if (noteToCopy.copyCount >= 1 && dots[0])
+              dots[0].classList.add("active");
+            if (noteToCopy.copyCount >= 2 && dots[1])
+              dots[1].classList.add("active");
+            if (noteToCopy.copyCount >= 3 && dots[2])
+              dots[2].classList.add("active");
+            card.querySelector(".copy-indicators").title =
+              `Copied ${noteToCopy.copyCount} times`;
           }
-        });
-      }).catch(() => showToast("❌ Failed to copy"));
+
+          chrome.storage.local.get(["notes"], (res) => {
+            const dbNotes = res.notes || [];
+            const dbNote = dbNotes.find((n) => n.id === id);
+            if (dbNote) {
+              dbNote.copyCount = noteToCopy.copyCount;
+              chrome.storage.local.set({ notes: dbNotes });
+            }
+          });
+        })
+        .catch(() => showToast("❌ Failed to copy"));
     });
   });
 
@@ -348,7 +364,11 @@ function renderPagination(pages) {
   } else {
     range.push(1);
     if (currentPage > 3) range.push("…");
-    for (let i = Math.max(2, currentPage - 1); i <= Math.min(pages - 1, currentPage + 1); i++)
+    for (
+      let i = Math.max(2, currentPage - 1);
+      i <= Math.min(pages - 1, currentPage + 1);
+      i++
+    )
       range.push(i);
     if (currentPage < pages - 2) range.push("…");
     range.push(pages);
@@ -396,10 +416,20 @@ function filterAndRender() {
         const domain = n.domain || "";
         const url = n.url || "";
         if (isCaseSensitive) {
-          return text.includes(query) || title.includes(query) || domain.includes(query) || url.includes(query);
+          return (
+            text.includes(query) ||
+            title.includes(query) ||
+            domain.includes(query) ||
+            url.includes(query)
+          );
         } else {
           const q = query.toLowerCase();
-          return text.toLowerCase().includes(q) || title.toLowerCase().includes(q) || domain.toLowerCase().includes(q) || url.toLowerCase().includes(q);
+          return (
+            text.toLowerCase().includes(q) ||
+            title.toLowerCase().includes(q) ||
+            domain.toLowerCase().includes(q) ||
+            url.toLowerCase().includes(q)
+          );
         }
       })
     : allNotes;
@@ -409,9 +439,13 @@ function filterAndRender() {
 
 if (copyAllBtn) {
   copyAllBtn.addEventListener("click", () => {
-    if (currentFilteredNotes.length === 0) { showToast("❌ No notes to copy"); return; }
+    if (currentFilteredNotes.length === 0) {
+      showToast("❌ No notes to copy");
+      return;
+    }
     const textDump = currentFilteredNotes.map((n) => n.text).join("\n\n");
-    navigator.clipboard.writeText(textDump)
+    navigator.clipboard
+      .writeText(textDump)
       .then(() => showToast(`📋 Copied ${currentFilteredNotes.length} notes!`))
       .catch(() => showToast("❌ Failed to copy notes"));
   });
@@ -426,7 +460,13 @@ if (caseSensitiveBtn) {
   });
 }
 
-searchInput.addEventListener("input", debounce(() => { currentPage = 1; filterAndRender(); }, 200));
+searchInput.addEventListener(
+  "input",
+  debounce(() => {
+    currentPage = 1;
+    filterAndRender();
+  }, 200)
+);
 
 // ── Load saved notes ──────────────────────────────────────────────────────────
 function loadNotes() {
@@ -467,7 +507,9 @@ exportBtn.addEventListener("click", () => {
   chrome.runtime.sendMessage({ action: "exportNotes" });
   showToast("📄 Exported as .md file!");
   exportBtn.textContent = "✓ Exported!";
-  setTimeout(() => { exportBtn.textContent = "⬇ Export .md"; }, 2200);
+  setTimeout(() => {
+    exportBtn.textContent = "⬇ Export .md";
+  }, 2200);
 });
 
 clearBtn.addEventListener("click", () => {
@@ -494,7 +536,8 @@ function updateStorageIndicator() {
     const mb = kb / 1024;
     const LIMIT_MB = 10;
 
-    let label, cls = "";
+    let label,
+      cls = "";
     if (mb >= 1) {
       label = `💾 ${mb.toFixed(2)} MB used`;
       if (mb > LIMIT_MB * 0.8) cls = "alert";
@@ -538,10 +581,32 @@ const saveNoteBtn = document.getElementById("saveNoteBtn");
 // notes.html is a full-page tab — no active-browser-tab context, leave target blank
 if (notepadTarget) notepadTarget.textContent = "";
 
+// Intercept Tab key in the notepad textarea to insert indentation
+if (notepadTextarea) {
+  notepadTextarea.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const start = notepadTextarea.selectionStart;
+      const end = notepadTextarea.selectionEnd;
+      const indent = "  "; // 2-space indentation
+      notepadTextarea.value =
+        notepadTextarea.value.substring(0, start) +
+        indent +
+        notepadTextarea.value.substring(end);
+      // Move cursor to after the inserted indentation
+      notepadTextarea.selectionStart = notepadTextarea.selectionEnd =
+        start + indent.length;
+    }
+  });
+}
+
 if (saveNoteBtn) {
   saveNoteBtn.addEventListener("click", () => {
     const text = notepadTextarea.value.trim();
-    if (!text) { showToast("Nothing to save"); return; }
+    if (!text) {
+      showToast("Nothing to save");
+      return;
+    }
 
     saveNoteBtn.disabled = true;
 
@@ -554,17 +619,20 @@ if (saveNoteBtn) {
       timestamp: new Date().toISOString(),
     };
 
-    chrome.runtime.sendMessage({ action: "saveTypedNote", note }, (response) => {
-      saveNoteBtn.disabled = false;
-      if (response?.success) {
-        notepadTextarea.value = "";
-        showToast("✅ Note saved");
-        const typedPanel = document.getElementById("view-typed");
-        if (typedPanel?.classList.contains("active")) loadTypedNotes();
-      } else {
-        showToast("❌ Save failed");
+    chrome.runtime.sendMessage(
+      { action: "saveTypedNote", note },
+      (response) => {
+        saveNoteBtn.disabled = false;
+        if (response?.success) {
+          notepadTextarea.value = "";
+          showToast("✅ Note saved");
+          const typedPanel = document.getElementById("view-typed");
+          if (typedPanel?.classList.contains("active")) loadTypedNotes();
+        } else {
+          showToast("❌ Save failed");
+        }
       }
-    });
+    );
   });
 }
 
@@ -595,30 +663,36 @@ function typedNoteCardHTML(note) {
 }
 
 function buildTypedColHTML(grouped) {
-  return grouped.map((g) => {
-    const totalNotes = g.domains.reduce((s, d) => s + d.notes.length, 0);
-    let html = `<div class="date-block">
+  return grouped
+    .map((g) => {
+      const totalNotes = g.domains.reduce((s, d) => s + d.notes.length, 0);
+      let html = `<div class="date-block">
       <div class="date-heading">
         <span class="date-label">${formatDateHeading(g.dateKey)}</span>
         <div class="date-rule"></div>
         <span class="date-count">${totalNotes} note${totalNotes !== 1 ? "s" : ""}</span>
       </div>`;
-    for (const { domain, notes: dn } of g.domains) {
-      if (domain) {
-        html += `<div class="domain-block">
+      for (const { domain, notes: dn } of g.domains) {
+        if (domain) {
+          html += `<div class="domain-block">
           <div class="domain-heading">
             <img class="domain-favicon" src="${faviconUrl(domain)}" alt="" />
             <span class="domain-name">${esc(domain)}</span>
           </div>`;
-        dn.forEach((n) => { html += typedNoteCardHTML(n); });
-        html += `</div>`;
-      } else {
-        dn.forEach((n) => { html += typedNoteCardHTML(n); });
+          dn.forEach((n) => {
+            html += typedNoteCardHTML(n);
+          });
+          html += `</div>`;
+        } else {
+          dn.forEach((n) => {
+            html += typedNoteCardHTML(n);
+          });
+        }
       }
-    }
-    html += `</div>`;
-    return html;
-  }).join("");
+      html += `</div>`;
+      return html;
+    })
+    .join("");
 }
 
 function renderTypedNotes(notes) {
@@ -666,11 +740,14 @@ function renderTypedNotes(notes) {
       if (!mdEl) return;
       // Use data-raw for the original plain text
       const rawText = mdEl.dataset.raw || mdEl.textContent;
-      navigator.clipboard.writeText(rawText).then(() => {
-        btn.classList.add("copied");
-        showToast("📋 Copied!");
-        setTimeout(() => btn.classList.remove("copied"), 1800);
-      }).catch(() => showToast("❌ Failed to copy"));
+      navigator.clipboard
+        .writeText(rawText)
+        .then(() => {
+          btn.classList.add("copied");
+          showToast("📋 Copied!");
+          setTimeout(() => btn.classList.remove("copied"), 1800);
+        })
+        .catch(() => showToast("❌ Failed to copy"));
     });
   });
 

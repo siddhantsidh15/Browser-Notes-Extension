@@ -468,7 +468,7 @@ themeBtn.addEventListener("click", () => {
 });
 
 // ── Storage ───────────────────────────────────────────────────────────────────
-const STORAGE_MAX_KB = 5120; // Chrome local storage ~5MB
+const STORAGE_MAX_KB = 51200; // Display reference: 50 MB (actual limit is unlimited via unlimitedStorage permission)
 
 function updateStorage() {
   chrome.storage.local.getBytesInUse(null, (bytes) => {
@@ -562,8 +562,6 @@ function loadDraft(callback) {
   });
 }
 
-
-
 if (notepadTextarea) {
   notepadTextarea.addEventListener("input", () => {
     updateNotepadPreview();
@@ -581,6 +579,20 @@ const CLOSERS = new Set(Object.values(BRACKET_PAIRS));
 
 if (notepadTextarea) {
   notepadTextarea.addEventListener("keydown", (e) => {
+    // Tab → insert indentation instead of moving focus
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const ta = notepadTextarea;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const indent = "  "; // 2-space indentation
+      ta.value = ta.value.slice(0, start) + indent + ta.value.slice(end);
+      ta.selectionStart = ta.selectionEnd = start + indent.length;
+      saveDraft();
+      updateNotepadPreview();
+      return;
+    }
+
     const closer = BRACKET_PAIRS[e.key];
 
     if (closer) {
@@ -588,15 +600,20 @@ if (notepadTextarea) {
       e.preventDefault();
       const ta = notepadTextarea;
       const start = ta.selectionStart;
-      const end   = ta.selectionEnd;
-      const val   = ta.value;
+      const end = ta.selectionEnd;
+      const val = ta.value;
       const hasSelection = start !== end;
 
       if (hasSelection) {
         // Wrap the selected text
-        ta.value = val.slice(0, start) + e.key + val.slice(start, end) + closer + val.slice(end);
+        ta.value =
+          val.slice(0, start) +
+          e.key +
+          val.slice(start, end) +
+          closer +
+          val.slice(end);
         ta.selectionStart = start + 1;
-        ta.selectionEnd   = end + 1;
+        ta.selectionEnd = end + 1;
       } else {
         // Insert pair, park cursor in the middle
         ta.value = val.slice(0, start) + e.key + closer + val.slice(start);
@@ -610,15 +627,16 @@ if (notepadTextarea) {
     if (CLOSERS.has(e.key)) {
       // Closing bracket pressed — skip over if it's already the next char
       const ta = notepadTextarea;
-      if (ta.selectionStart === ta.selectionEnd &&
-          ta.value[ta.selectionStart] === e.key) {
+      if (
+        ta.selectionStart === ta.selectionEnd &&
+        ta.value[ta.selectionStart] === e.key
+      ) {
         e.preventDefault();
         ta.selectionStart = ta.selectionEnd = ta.selectionStart + 1;
       }
     }
   });
 }
-
 
 // ── Insert text at the current cursor position, replacing any selection ──────
 function insertAtCursor(el, text) {
@@ -839,6 +857,5 @@ function loadTypedNotes() {
     });
   } else {
     updateNotepadPreview();
-
   }
 })();
