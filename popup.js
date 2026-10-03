@@ -483,11 +483,9 @@ function updateStorage() {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-function focusNotepadAtEnd() {
+function focusNotepad() {
   if (!notepadTextarea) return;
   notepadTextarea.focus();
-  const len = notepadTextarea.value.length;
-  notepadTextarea.selectionStart = notepadTextarea.selectionEnd = len;
 }
 
 function switchTab(tabName) {
@@ -498,7 +496,7 @@ function switchTab(tabName) {
     panel.classList.toggle("active", panel.id === `panel-${tabName}`)
   );
   if (tabName === "typed") loadTypedNotes();
-  if (tabName === "notepad") focusNotepadAtEnd();
+  if (tabName === "notepad") focusNotepad();
 }
 
 tabBtns.forEach((btn) => {
@@ -544,12 +542,19 @@ function updateNotepadPreview() {
 }
 
 // ── Draft persistence ─────────────────────────────────────────────────────────
-// Auto-save the notepad draft to chrome.storage.local on every keystroke so it
+// Auto-save the notepad draft and cursor position to chrome.storage.local so it
 // survives the popup being closed without saving.
 const DRAFT_KEY = "notepadDraft";
 
 function saveDraft() {
-  chrome.storage.local.set({ [DRAFT_KEY]: notepadTextarea.value });
+  if (!notepadTextarea) return;
+  chrome.storage.local.set({
+    [DRAFT_KEY]: {
+      text: notepadTextarea.value,
+      start: notepadTextarea.selectionStart,
+      end: notepadTextarea.selectionEnd,
+    },
+  });
 }
 
 function clearDraft() {
@@ -558,7 +563,17 @@ function clearDraft() {
 
 function loadDraft(callback) {
   chrome.storage.local.get([DRAFT_KEY], (result) => {
-    callback(result[DRAFT_KEY] || "");
+    const raw = result[DRAFT_KEY];
+    if (typeof raw === "string") {
+      callback({ text: raw, start: raw.length, end: raw.length });
+    } else if (raw && typeof raw === "object") {
+      const text = raw.text || "";
+      const start = typeof raw.start === "number" ? raw.start : text.length;
+      const end = typeof raw.end === "number" ? raw.end : text.length;
+      callback({ text, start, end });
+    } else {
+      callback({ text: "", start: 0, end: 0 });
+    }
   });
 }
 
@@ -567,6 +582,9 @@ if (notepadTextarea) {
     updateNotepadPreview();
     saveDraft();
   });
+  notepadTextarea.addEventListener("keyup", saveDraft);
+  notepadTextarea.addEventListener("mouseup", saveDraft);
+  notepadTextarea.addEventListener("select", saveDraft);
 }
 
 // ── Auto-closing bracket pairs ────────────────────────────────────────────────
@@ -646,6 +664,7 @@ function insertAtCursor(el, text) {
   const pos = start + text.length;
   el.selectionStart = el.selectionEnd = pos;
   el.focus();
+  saveDraft();
 }
 
 // ── Paste an image from the clipboard into the note ───────────────────────────
@@ -848,12 +867,15 @@ function loadTypedNotes() {
   activeTabInfo = await detectActiveTab();
   renderNotepadTarget();
 
-  // Restore unsaved draft so typing isn't lost when the popup closes
+  // Restore unsaved draft and cursor position so state isn't lost when the popup closes
   if (notepadTextarea) {
-    loadDraft((draft) => {
-      notepadTextarea.value = draft;
+    loadDraft(({ text, start, end }) => {
+      notepadTextarea.value = text;
       updateNotepadPreview();
-      focusNotepadAtEnd(); // place cursor at end of restored text
+      notepadTextarea.focus();
+      const validStart = Math.min(Math.max(0, start), text.length);
+      const validEnd = Math.min(Math.max(0, end), text.length);
+      notepadTextarea.setSelectionRange(validStart, validEnd);
     });
   } else {
     updateNotepadPreview();

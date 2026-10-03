@@ -658,8 +658,8 @@
       }
 
       .notepad-textarea {
-        flex: none;
-        height: 140px;
+        flex: 1;
+        /* height: 140px; */
         resize: vertical;
         background: var(--surface2);
         border: 1px solid var(--border);
@@ -679,7 +679,8 @@
 
       /* ── Live preview pane ── */
       .notepad-preview-wrap {
-        display: flex;
+        /* display: flex; */
+        display: none;
         flex-direction: column;
         gap: 4px;
         flex: 1;
