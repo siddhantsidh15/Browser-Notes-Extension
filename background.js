@@ -131,6 +131,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "updateTypedNote") {
+    chrome.storage.local.get(["typedNotes"]).then((result) => {
+      const typedNotes = result.typedNotes || [];
+      const idx = typedNotes.findIndex((n) => n.id === message.id);
+      if (idx === -1) {
+        sendResponse({ success: false, error: "not found" });
+        return;
+      }
+      // Keep id / timestamp / source info; only overwrite the edited fields
+      typedNotes[idx] = {
+        ...typedNotes[idx],
+        ...message.updates,
+        updatedAt: new Date().toISOString(),
+      };
+      chrome.storage.local
+        .set({ typedNotes })
+        .then(() => sendResponse({ success: true }));
+    });
+    return true;
+  }
+
   if (message.action === "deleteTypedNote") {
     chrome.storage.local.get(["typedNotes"]).then((result) => {
       const typedNotes = (result.typedNotes || []).filter(

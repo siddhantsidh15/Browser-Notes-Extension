@@ -912,6 +912,268 @@
         border-color: var(--green);
         color: var(--green);
       }
+
+      /* ── Utility ── */
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ── Notebook dropdown (Notepad tab) ── */
+      .nb-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+        z-index: 20;
+      }
+
+      .nb-label {
+        font-family: "DM Mono", monospace;
+        font-size: 9.5px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .nb-dropdown {
+        position: relative;
+      }
+
+      .nb-trigger {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 220px;
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 6px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: border-color 0.15s;
+      }
+
+      .nb-trigger:hover,
+      .nb-dropdown.open .nb-trigger {
+        border-color: var(--accent-border);
+      }
+
+      .nb-trigger-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .nb-trigger-label.placeholder {
+        color: var(--muted);
+      }
+
+      .nb-caret {
+        font-size: 9px;
+        color: var(--muted);
+      }
+
+      .nb-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        width: 100%;
+        max-height: 210px;
+        overflow-y: auto;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+        padding: 4px;
+        z-index: 50;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+
+      .nb-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border-radius: 5px;
+        font-size: 12px;
+        color: var(--text);
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      .nb-item:hover {
+        background: var(--accent-dim);
+      }
+
+      .nb-item.selected {
+        color: var(--accent);
+      }
+
+      .nb-check {
+        width: 10px;
+        font-size: 10px;
+        flex-shrink: 0;
+      }
+
+      .nb-item-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .nb-item-name.muted {
+        color: var(--muted);
+        font-style: italic;
+      }
+
+      .nb-rename-input {
+        flex: 1;
+        min-width: 0;
+        font: inherit;
+        font-size: 12px;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--accent-border);
+        border-radius: 4px;
+        padding: 2px 6px;
+        outline: none;
+      }
+
+      .nb-add {
+        margin-top: 4px;
+        padding: 8px 8px 6px;
+        border-top: 1px solid var(--border);
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        color: var(--accent);
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+        border-radius: 0 0 5px 5px;
+      }
+
+      .nb-add:hover {
+        background: var(--accent-dim);
+      }
+
+      .nb-menu > .nb-add:first-child {
+        margin-top: 0;
+        border-top: none;
+      }
+
+      .nb-hint {
+        font-family: "DM Mono", monospace;
+        font-size: 9px;
+        color: var(--muted);
+        letter-spacing: 0.2px;
+      }
+
+      .nb-edit-badge {
+        margin-left: auto;
+        font-family: "DM Mono", monospace;
+        font-size: 9.5px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--accent);
+        background: var(--accent-dim);
+        border: 1px solid var(--accent-border);
+        border-radius: 20px;
+        padding: 2px 9px;
+      }
+
+      .notepad-btns {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .btn-ghost {
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        padding: 7px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+
+      .btn-ghost:hover {
+        border-color: var(--border-hover);
+        color: var(--text);
+      }
+
+      /* ── Typed tab: toolbar, notebook chip, edit button ── */
+      .typed-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 14px 0;
+      }
+
+      .typed-count {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.3px;
+      }
+
+      .typed-filter {
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        max-width: 240px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 5px 8px;
+        border-radius: 6px;
+        outline: none;
+        cursor: pointer;
+        transition: border-color 0.15s;
+      }
+
+      .typed-filter:hover,
+      .typed-filter:focus {
+        border-color: var(--accent-border);
+      }
+
+      .nb-chip {
+        display: inline-block;
+        margin-left: 8px;
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: bottom;
+        font-family: "DM Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 0.3px;
+        color: var(--accent);
+        background: var(--accent-dim);
+        border: 1px solid var(--accent-border);
+        border-radius: 20px;
+        padding: 1px 8px;
+      }
+
+      /* Edit button only appears while hovering the card */
+      .typed-edit-btn {
+        opacity: 0;
+      }
+
+      .note-card:hover .typed-edit-btn,
+      .typed-edit-btn:focus-visible {
+        opacity: 1;
+      }
     </style>
   </head>
   <body>
@@ -963,6 +1225,30 @@
 
     <div class="tab-panel active" id="panel-notepad">
       <div class="notepad-wrap">
+        <div class="nb-bar">
+          <span class="nb-label">Notebook</span>
+          <div class="nb-dropdown" id="nbDropdown">
+            <button
+              type="button"
+              class="nb-trigger"
+              id="nbTrigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >
+              <span class="nb-trigger-label placeholder" id="nbTriggerLabel"
+                >No notebook</span
+              >
+              <span class="nb-caret">▾</span>
+            </button>
+            <div class="nb-menu" id="nbMenu" role="listbox" hidden></div>
+          </div>
+          <span class="nb-hint" id="nbHint"
+            >double-click a notebook to rename</span
+          >
+          <span class="nb-edit-badge" id="editBadge" hidden
+            >✎ Editing note</span
+          >
+        </div>
         <div class="notepad-hint">
           <code># text</code> → small heading · <code>## text</code> → medium
           heading · <code>### text</code> → large heading ·
@@ -984,13 +1270,25 @@
         </div>
         <div class="notepad-actions">
           <span class="notepad-target" id="notepadTarget"></span>
-          <button class="btn-primary" id="saveNoteBtn">Save note</button>
+          <div class="notepad-btns">
+            <button class="btn-ghost" id="cancelEditBtn" hidden>Cancel</button>
+            <button class="btn-primary" id="saveNoteBtn">Save note</button>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="tab-panel" id="panel-typed">
+      <div class="typed-toolbar">
+        <span class="typed-count" id="typedCount"></span>
+        <select
+          id="typedFilter"
+          class="typed-filter"
+          title="Filter by notebook"
+        ></select>
+      </div>
       <div id="typedNotesList" class="typed-list"></div>
+      <div id="typedPagination" class="pagination" style="display: none"></div>
     </div>
 
     <div class="footer">
