@@ -597,6 +597,31 @@ const CLOSERS = new Set(Object.values(BRACKET_PAIRS));
 
 if (notepadTextarea) {
   notepadTextarea.addEventListener("keydown", (e) => {
+    // Symbol repetition expansion (e.g. -*5 + Space/Enter expands to -----)
+    if (e.key === " " || e.key === "Enter") {
+      const ta = notepadTextarea;
+      if (ta.selectionStart === ta.selectionEnd) {
+        const pos = ta.selectionStart;
+        const textBefore = ta.value.slice(0, pos);
+        // Matches non-whitespace character before '*' followed by digits at the end of textBefore
+        const match =
+          textBefore.match(/(\S)\*(\d+)$/) || textBefore.match(/(\S)\x(\d+)$/);
+        if (match) {
+          e.preventDefault();
+          const symbol = match[1];
+          const count = parseInt(match[2], 10);
+          const repeatStr = symbol.repeat(count);
+          const startReplace = pos - match[0].length;
+          ta.value =
+            ta.value.slice(0, startReplace) + repeatStr + ta.value.slice(pos);
+          ta.selectionStart = ta.selectionEnd = startReplace + repeatStr.length;
+          saveDraft();
+          updateNotepadPreview();
+          return;
+        }
+      }
+    }
+
     // Tab → insert indentation instead of moving focus
     if (e.key === "Tab") {
       e.preventDefault();
