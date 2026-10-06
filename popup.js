@@ -1,3 +1,8 @@
+// ── Mode: dropdown popup vs. docked side panel ───────────────────────────────
+// sidepanel.html redirects here with ?mode=panel
+const IS_PANEL = new URLSearchParams(location.search).get("mode") === "panel";
+document.documentElement.classList.toggle("is-panel", IS_PANEL);
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const notesList = document.getElementById("notesList");
 const searchInput = document.getElementById("searchInput");
@@ -483,6 +488,62 @@ themeBtn.addEventListener("click", () => {
   applyTheme(!isDark);
   savePrefs({ theme: isDark ? "dark" : "light" });
 });
+
+// ── Dock toggle ───────────────────────────────────────────────────────────────
+// ON  -> toolbar icon / Cmd+M open the docked side panel (see background.js)
+// OFF -> toolbar icon / Cmd+M open the normal dropdown popup
+const DOCK_KEY = "dockMode";
+const dockToggle = document.getElementById("dockToggle");
+
+async function initDockToggle() {
+  const r = await chrome.storage.local.get([DOCK_KEY]);
+  dockToggle.checked = r[DOCK_KEY] === true;
+}
+
+dockToggle.addEventListener("change", async () => {
+  const on = dockToggle.checked;
+
+  if (!on) {
+    // Turning it off: save, then close the panel. Next click gives the popup back.
+    await chrome.storage.local.set({ [DOCK_KEY]: false });
+    window.close();
+    return;
+  }
+
+  // Turning it on from the dropdown popup: dock right away.
+  // Start the lookup + save first so sidePanel.open() still counts as a user gesture.
+  const tabQuery = chrome.tabs.query({ active: true, currentWindow: true });
+  chrome.storage.local.set({ [DOCK_KEY]: true });
+  try {
+    const [tab] = await tabQuery;
+    chrome.sidePanel.setOptions({
+      tabId: tab.id,
+      path: "sidepanel.html",
+      enabled: true,
+    });
+    await chrome.sidePanel.open({ tabId: tab.id });
+    window.close();
+  } catch (err) {
+    console.error("Could not open side panel:", err);
+    showToast("Dock enabled — press ⌘M / Ctrl+M to open", 2600);
+  }
+});
+
+initDockToggle();
+
+if (IS_PANEL) {
+  // The panel is tab-specific (see background.js): Chrome hides it when you
+  // switch to another tab and shows it again when you come back to this one.
+
+  // The panel stays open while you keep selecting text on the page, so pick up
+  // notes saved through the right-click menu without needing to reopen it.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes.notes) return;
+    const before = changes.notes.oldValue?.length ?? 0;
+    const after = changes.notes.newValue?.length ?? 0;
+    if (after > before) loadNotes();
+  });
+}
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 const STORAGE_MAX_KB = 51200; // Display reference: 50 MB (actual limit is unlimited via unlimitedStorage permission)
@@ -1018,7 +1079,8 @@ if (nbTrigger && nbMenu) {
 // ── Editing a typed note ─────────────────────────────────────────────────────
 function updateEditUI() {
   const editing = editingNoteId !== null;
-  if (saveNoteBtn) saveNoteBtn.textContent = editing ? "Update note" : "Save note";
+  if (saveNoteBtn)
+    saveNoteBtn.textContent = editing ? "Update note" : "Save note";
   if (cancelEditBtn) cancelEditBtn.hidden = !editing;
   if (editBadge) editBadge.hidden = !editing;
   renderNotepadTarget();

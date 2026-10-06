@@ -6,6 +6,57 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Save to Notes",
     contexts: ["selection"],
   });
+  applyDockMode();
+});
+
+// ── Docked side-panel mode ────────────────────────────────────────────────────
+// When the "Dock" toggle in the popup is ON, the toolbar icon has NO popup, so
+// clicking it (or pressing Cmd/Ctrl+M, which is mapped to _execute_action) fires
+// action.onClicked and we open Chrome's side panel instead. Chrome handles the
+// page split and the draggable divider. When the toggle is OFF the normal
+// dropdown popup is restored.
+const DOCK_KEY = "dockMode";
+
+async function applyDockMode() {
+  const r = await chrome.storage.local.get([DOCK_KEY]);
+  const on = r[DOCK_KEY] === true;
+  await chrome.action.setPopup({ popup: on ? "" : "popup.html" });
+
+  // The panel is only ever enabled per tab (see onClicked below), never globally,
+  // so it shows on the tab you opened it on and nowhere else.
+  await chrome.sidePanel.setOptions({ enabled: false });
+
+  // Dock turned off: drop the panel from every tab that had it
+  if (!on) {
+    const tabs = await chrome.tabs.query({});
+    for (const t of tabs) {
+      chrome.sidePanel
+        .setOptions({ tabId: t.id, enabled: false })
+        .catch(() => {});
+    }
+  }
+}
+
+// setPopup() isn't remembered across browser restarts / worker restarts, so
+// re-apply the saved state whenever the service worker starts.
+applyDockMode();
+chrome.runtime.onStartup.addListener(applyDockMode);
+
+// Flip between popup <-> side panel as soon as the toggle changes
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes[DOCK_KEY]) applyDockMode();
+});
+
+chrome.action.onClicked.addListener((tab) => {
+  // Keep these calls synchronous (no awaits in between): sidePanel.open()
+  // needs the user gesture. The panel is enabled for THIS tab only, so it
+  // hides when you switch away and is still there when you come back.
+  chrome.sidePanel
+    .setOptions({ tabId: tab.id, path: "sidepanel.html", enabled: true })
+    .catch((err) => console.error("Could not enable side panel:", err));
+  chrome.sidePanel
+    .open({ tabId: tab.id })
+    .catch((err) => console.error("Could not open side panel:", err));
 });
 
 // // Open the notes page when the extension icon is clicked
@@ -32,7 +83,6 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     });
   }
 });
-
 
 function getDateKey(isoTimestamp) {
   const d = new Date(isoTimestamp);

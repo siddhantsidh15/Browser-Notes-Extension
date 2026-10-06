@@ -1,15 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Save to Notes",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Select any text on a webpage, right-click, and save it to your notes. Click the extension icon to view all notes.",
   "permissions": [
     "contextMenus",
     "storage",
     "unlimitedStorage",
     "downloads",
-    "tabs"
+    "tabs",
+    "sidePanel"
   ],
+  "minimum_chrome_version": "116",
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "commands": {
     "_execute_action": {
       "suggested_key": {
