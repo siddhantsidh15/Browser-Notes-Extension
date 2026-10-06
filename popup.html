@@ -1225,30 +1225,6 @@
 
     <div class="tab-panel active" id="panel-notepad">
       <div class="notepad-wrap">
-        <div class="nb-bar">
-          <span class="nb-label">Notebook</span>
-          <div class="nb-dropdown" id="nbDropdown">
-            <button
-              type="button"
-              class="nb-trigger"
-              id="nbTrigger"
-              aria-haspopup="listbox"
-              aria-expanded="false"
-            >
-              <span class="nb-trigger-label placeholder" id="nbTriggerLabel"
-                >No notebook</span
-              >
-              <span class="nb-caret">▾</span>
-            </button>
-            <div class="nb-menu" id="nbMenu" role="listbox" hidden></div>
-          </div>
-          <span class="nb-hint" id="nbHint"
-            >double-click a notebook to rename</span
-          >
-          <span class="nb-edit-badge" id="editBadge" hidden
-            >✎ Editing note</span
-          >
-        </div>
         <div class="notepad-hint">
           <code># text</code> → small heading · <code>## text</code> → medium
           heading · <code>### text</code> → large heading ·
@@ -1270,6 +1246,29 @@
         </div>
         <div class="notepad-actions">
           <span class="notepad-target" id="notepadTarget"></span>
+          <div class="nb-bar">
+            <div class="nb-dropdown" id="nbDropdown">
+              <button
+                type="button"
+                class="nb-trigger"
+                id="nbTrigger"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                <span class="nb-trigger-label placeholder" id="nbTriggerLabel"
+                  >No notebook</span
+                >
+                <span class="nb-caret">▾</span>
+              </button>
+              <div class="nb-menu" id="nbMenu" role="listbox" hidden></div>
+            </div>
+            <!-- <span class="nb-hint" id="nbHint"
+              >double-click a notebook to rename</span
+            >
+            <span class="nb-edit-badge" id="editBadge" hidden
+              >✎ Editing note</span
+            > -->
+          </div>
           <div class="notepad-btns">
             <button class="btn-ghost" id="cancelEditBtn" hidden>Cancel</button>
             <button class="btn-primary" id="saveNoteBtn">Save note</button>

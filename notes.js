@@ -22,6 +22,12 @@ const PER_PAGE = 20;
 let isCaseSensitive = false;
 let currentFilteredNotes = [];
 let allTypedNotes = [];
+const TYPED_PER_PAGE = 10;
+let typedPage = 1;
+let typedFilter = "all"; // "all" | "none" | <notebook id>
+let notebooks = []; // [{ id, name }]
+let activeNotebookId = null; // notebook new notes are saved into
+let editingNoteId = null; // id of the typed note being edited, or null
 
 // ── Persist preferences in chrome.storage.local ───────────────────────────────
 async function loadPrefs() {
@@ -131,12 +137,15 @@ const Markdown = {
     },
   ],
 
-  render(rawText) {
+  render(rawText, images = {}) {
     let html = esc(rawText || "");
+    html = html.replace(/\[\[img:([\w-]+)\]\]/g, "\u0000IMG$1\u0000");
     for (const rule of this.rules) {
       html = html.replace(rule.pattern, (...args) => rule.render(...args));
     }
-    return html;
+    return html.replace(/\u0000IMG([\w-]+)\u0000/g, (_m, id) =>
+      images[id] ? `<img class="md-image" src="${images[id]}" alt="pasted image" />` : ""
+    );
   },
 };
 
@@ -565,6 +574,7 @@ function switchView(viewName) {
     panel.classList.toggle("active", panel.id === `view-${viewName}`)
   );
   if (viewName === "typed") loadTypedNotes();
+  if (viewName === "notepad") document.getElementById("notepadTextarea")?.focus();
 }
 
 viewTabBtns.forEach((btn) => {
@@ -577,6 +587,8 @@ viewTabBtns.forEach((btn) => {
 const notepadTextarea = document.getElementById("notepadTextarea");
 const notepadTarget = document.getElementById("notepadTarget");
 const saveNoteBtn = document.getElementById("saveNoteBtn");
+const cancelEditBtn = document.getElementById("cancelEditBtn");
+const editBadge = document.getElementById("editBadge");
 
 // notes.html is a full-page tab — no active-browser-tab context, leave target blank
 if (notepadTarget) notepadTarget.textContent = "";
@@ -610,6 +622,29 @@ if (saveNoteBtn) {
 
     saveNoteBtn.disabled = true;
 
+    // ── Editing an existing typed note → update it in place ──
+    // (only text + notebook are sent; images, date and source are untouched)
+    if (editingNoteId !== null) {
+      chrome.runtime.sendMessage(
+        {
+          action: "updateTypedNote",
+          id: editingNoteId,
+          updates: { text, notebookId: activeNotebookId },
+        },
+        (response) => {
+          saveNoteBtn.disabled = false;
+          if (response?.success) {
+            finishEditing();
+            showToast("✅ Note updated");
+            switchView("typed");
+          } else {
+            showToast("❌ Update failed");
+          }
+        }
+      );
+      return;
+    }
+
     const note = {
       id: Date.now(),
       text,
@@ -617,6 +652,7 @@ if (saveNoteBtn) {
       title: "",
       domain: "",
       timestamp: new Date().toISOString(),
+      notebookId: activeNotebookId,
     };
 
     chrome.runtime.sendMessage(
@@ -639,6 +675,266 @@ if (saveNoteBtn) {
 // ═════════════════════════════════════════════════════════════════════════════
 //  TYPED NOTES
 // ═════════════════════════════════════════════════════════════════════════════
+// ── Notebooks (shared with the popup via chrome.storage) ─────────────────────
+const NOTEBOOKS_KEY = "notebooks";
+const ACTIVE_NOTEBOOK_KEY = "activeNotebook";
+const nbDropdown = document.getElementById("nbDropdown");
+const nbTrigger = document.getElementById("nbTrigger");
+const nbTriggerLabel = document.getElementById("nbTriggerLabel");
+const nbMenu = document.getElementById("nbMenu");
+const typedFilterEl = document.getElementById("typedFilter");
+const typedCountEl = document.getElementById("typedCount");
+const typedPaginationEl = document.getElementById("typedPagination");
+
+function loadNotebooks() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([NOTEBOOKS_KEY, ACTIVE_NOTEBOOK_KEY], (r) => {
+      notebooks = Array.isArray(r[NOTEBOOKS_KEY]) ? r[NOTEBOOKS_KEY] : [];
+      const active = r[ACTIVE_NOTEBOOK_KEY];
+      activeNotebookId = notebooks.some((n) => n.id === active) ? active : null;
+      renderNotebookUI();
+      resolve();
+    });
+  });
+}
+
+function persistNotebooks() {
+  chrome.storage.local.set({ [NOTEBOOKS_KEY]: notebooks });
+}
+
+function notebookName(id) {
+  return notebooks.find((n) => n.id === id)?.name || null;
+}
+
+// persist=false while editing a note, so choosing a notebook for that note
+// doesn't change where *new* notes are saved.
+function setActiveNotebook(id, persist = true) {
+  activeNotebookId = id || null;
+  if (persist) {
+    chrome.storage.local.set({ [ACTIVE_NOTEBOOK_KEY]: activeNotebookId });
+  }
+  renderNotebookUI();
+}
+
+function restoreActiveNotebook() {
+  chrome.storage.local.get([ACTIVE_NOTEBOOK_KEY], (r) => {
+    const id = r[ACTIVE_NOTEBOOK_KEY];
+    activeNotebookId = notebooks.some((n) => n.id === id) ? id : null;
+    renderNotebookUI();
+  });
+}
+
+function renderNotebookUI() {
+  if (nbTriggerLabel) {
+    const name = notebookName(activeNotebookId);
+    nbTriggerLabel.textContent = name || "No notebook";
+    nbTriggerLabel.classList.toggle("placeholder", !name);
+  }
+  renderNotebookMenu();
+  renderTypedFilter();
+}
+
+function renderNotebookMenu() {
+  if (!nbMenu) return;
+  let html = "";
+  if (notebooks.length > 0) {
+    const sel = !activeNotebookId;
+    html += `<div class="nb-item ${sel ? "selected" : ""}" data-id="" role="option">
+      <span class="nb-check">${sel ? "✓" : ""}</span>
+      <span class="nb-item-name muted">No notebook</span>
+    </div>`;
+  }
+  for (const nb of notebooks) {
+    const sel = nb.id === activeNotebookId;
+    html += `<div class="nb-item ${sel ? "selected" : ""}" data-id="${esc(nb.id)}" role="option" title="Double-click to rename">
+      <span class="nb-check">${sel ? "✓" : ""}</span>
+      <span class="nb-item-name">${esc(nb.name)}</span>
+    </div>`;
+  }
+  html += `<div class="nb-add" role="option">+ Add notebook</div>`;
+  nbMenu.innerHTML = html;
+}
+
+function openNbMenu() {
+  nbMenu.hidden = false;
+  nbDropdown.classList.add("open");
+  nbTrigger.setAttribute("aria-expanded", "true");
+}
+
+function closeNbMenu() {
+  nbMenu.hidden = true;
+  nbDropdown.classList.remove("open");
+  nbTrigger.setAttribute("aria-expanded", "false");
+}
+
+function addNotebook() {
+  let n = notebooks.length + 1;
+  let name = `Notebook ${n}`;
+  while (notebooks.some((nb) => nb.name.toLowerCase() === name.toLowerCase())) {
+    name = `Notebook ${++n}`;
+  }
+  const nb = { id: `nb_${Date.now()}`, name };
+  notebooks.push(nb);
+  persistNotebooks();
+  setActiveNotebook(nb.id, editingNoteId === null);
+  startRename(nb.id); // let them name it straight away
+}
+
+function startRename(id) {
+  const item = nbMenu.querySelector(`.nb-item[data-id="${id}"]`);
+  const nb = notebooks.find((n) => n.id === id);
+  const nameEl = item?.querySelector(".nb-item-name");
+  if (!item || !nb || !nameEl) return;
+
+  const input = document.createElement("input");
+  input.className = "nb-rename-input";
+  input.value = nb.name;
+  input.maxLength = 40;
+  nameEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = (commit) => {
+    if (done) return;
+    done = true;
+    if (commit) {
+      const name = input.value.trim();
+      const clash = notebooks.some(
+        (n) => n.id !== id && n.name.toLowerCase() === name.toLowerCase()
+      );
+      if (!name) showToast("Name can't be empty");
+      else if (clash) showToast("A notebook with that name exists");
+      else if (name !== nb.name) {
+        nb.name = name;
+        persistNotebooks();
+        showToast("✏️ Notebook renamed");
+      }
+    }
+    renderNotebookUI();
+    renderTypedNotes(); // chips + filter pick up the new name
+  };
+
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") finish(true);
+    if (e.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true));
+  input.addEventListener("click", (e) => e.stopPropagation());
+  input.addEventListener("dblclick", (e) => e.stopPropagation());
+}
+
+if (nbTrigger && nbMenu) {
+  nbTrigger.addEventListener("click", () =>
+    nbMenu.hidden ? openNbMenu() : closeNbMenu()
+  );
+
+  // Single click selects; double click renames. The select is delayed slightly
+  // so a double click doesn't also close the menu on its first click.
+  let nbClickTimer = null;
+  nbMenu.addEventListener("click", (e) => {
+    if (e.target.closest(".nb-rename-input")) return;
+    if (e.target.closest(".nb-add")) {
+      addNotebook();
+      return;
+    }
+    const item = e.target.closest(".nb-item");
+    if (!item) return;
+    clearTimeout(nbClickTimer);
+    nbClickTimer = setTimeout(() => {
+      setActiveNotebook(item.dataset.id || null, editingNoteId === null);
+      closeNbMenu();
+    }, 220);
+  });
+
+  nbMenu.addEventListener("dblclick", (e) => {
+    const item = e.target.closest(".nb-item");
+    if (!item || !item.dataset.id) return;
+    clearTimeout(nbClickTimer);
+    startRename(item.dataset.id);
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!nbDropdown.contains(e.target)) closeNbMenu();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !nbMenu.hidden) closeNbMenu();
+  });
+}
+
+// ── Editing a typed note ─────────────────────────────────────────────────────
+function updateEditUI() {
+  const editing = editingNoteId !== null;
+  if (saveNoteBtn) saveNoteBtn.textContent = editing ? "Update note" : "Save note";
+  if (cancelEditBtn) cancelEditBtn.hidden = !editing;
+  if (editBadge) editBadge.hidden = !editing;
+}
+
+function startEditingNote(note) {
+  if (
+    notepadTextarea.value.trim() !== "" &&
+    notepadTextarea.value !== note.text &&
+    !confirm("Replace what's currently in the Notepad with this note?")
+  ) {
+    return;
+  }
+  editingNoteId = note.id;
+  notepadTextarea.value = note.text;
+  setActiveNotebook(
+    notebooks.some((n) => n.id === note.notebookId) ? note.notebookId : null,
+    false
+  );
+  updateEditUI();
+  switchView("notepad");
+  const end = notepadTextarea.value.length;
+  notepadTextarea.setSelectionRange(end, end);
+}
+
+function finishEditing() {
+  editingNoteId = null;
+  notepadTextarea.value = "";
+  updateEditUI();
+  restoreActiveNotebook();
+}
+
+if (cancelEditBtn) {
+  cancelEditBtn.addEventListener("click", () => {
+    finishEditing();
+    switchView("typed");
+  });
+}
+
+// Keep this page in step with the popup: if notebooks or typed notes change in
+// storage from somewhere else, pick the change up. Changes this page made
+// itself are already reflected in memory, so they're skipped.
+chrome.storage.onChanged?.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes[NOTEBOOKS_KEY]) {
+    const next = changes[NOTEBOOKS_KEY].newValue || [];
+    if (JSON.stringify(next) !== JSON.stringify(notebooks)) {
+      notebooks = next;
+      if (!notebooks.some((n) => n.id === activeNotebookId)) {
+        activeNotebookId = null;
+      }
+      if (!nbMenu.querySelector(".nb-rename-input")) renderNotebookUI();
+      if (document.getElementById("view-typed")?.classList.contains("active")) {
+        renderTypedNotes();
+      }
+    }
+  }
+  if (changes.typedNotes) {
+    const next = (changes.typedNotes.newValue || []).slice().reverse();
+    if (
+      JSON.stringify(next) !== JSON.stringify(allTypedNotes) &&
+      document.getElementById("view-typed")?.classList.contains("active")
+    ) {
+      allTypedNotes = next;
+      renderTypedNotes();
+    }
+  }
+});
+
 const typedLeftCol = document.getElementById("typedLeftCol");
 const typedRightCol = document.getElementById("typedRightCol");
 const clearTypedBtn = document.getElementById("clearTypedBtn");
@@ -647,13 +943,15 @@ function typedNoteCardHTML(note) {
   const COPY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
   return `
   <div class="note-card" data-id="${note.id}">
+    <button class="typed-note-edit" data-id="${note.id}" title="Edit note" aria-label="Edit">✎</button>
     <button class="typed-note-delete" data-id="${note.id}" title="Delete">✕</button>
     <div class="note-meta-row">
       <span class="note-time">${formatTime(note.timestamp)}</span>
+      ${notebookName(note.notebookId) ? `<span class="nb-chip" title="Notebook">${esc(notebookName(note.notebookId))}</span>` : ""}
       ${note.url ? `<a class="note-source-link" href="${esc(note.url)}" target="_blank" title="${esc(note.url)}">↗ ${esc(note.title || note.url)}</a>` : ""}
     </div>
     <div class="typed-note-body">
-      <div class="md-content" data-raw="${esc(note.text)}">${Markdown.render(note.text)}</div>
+      <div class="md-content" data-raw="${esc(note.text)}">${Markdown.render(note.text, note.images || {})}</div>
     </div>
     <div class="typed-card-actions">
       <button class="typed-expand-btn" title="Expand / collapse">Show more</button>
@@ -695,24 +993,121 @@ function buildTypedColHTML(grouped) {
     .join("");
 }
 
-function renderTypedNotes(notes) {
-  if (!typedLeftCol || !typedRightCol) return;
+function renderTypedFilter() {
+  if (!typedFilterEl) return;
+  let opts = `<option value="all">All notebooks</option>`;
+  for (const nb of notebooks) {
+    opts += `<option value="${esc(nb.id)}">${esc(nb.name)}</option>`;
+  }
+  opts += `<option value="none">No notebook</option>`;
+  typedFilterEl.innerHTML = opts;
+  if (![...typedFilterEl.options].some((o) => o.value === typedFilter)) {
+    typedFilter = "all";
+  }
+  typedFilterEl.value = typedFilter;
+}
 
-  if (notes.length === 0) {
-    typedLeftCol.innerHTML = `
-      <div class="typed-empty-state">
-        <div class="big-icon">✎</div>
-        <h2>No typed notes yet</h2>
-        <p>Switch to the <strong>Notepad</strong> tab and write your first note.</p>
-      </div>`;
-    typedRightCol.innerHTML = "";
+function getFilteredTypedNotes() {
+  if (typedFilter === "all") return allTypedNotes;
+  if (typedFilter === "none") {
+    return allTypedNotes.filter((n) => !notebookName(n.notebookId));
+  }
+  return allTypedNotes.filter((n) => n.notebookId === typedFilter);
+}
+
+if (typedFilterEl) {
+  typedFilterEl.addEventListener("change", () => {
+    typedFilter = typedFilterEl.value;
+    typedPage = 1;
+    renderTypedNotes();
+  });
+}
+
+function renderTypedPagination(total) {
+  if (!typedPaginationEl) return;
+  const pages = Math.ceil(total / TYPED_PER_PAGE);
+  if (pages <= 1) {
+    typedPaginationEl.style.display = "none";
+    typedPaginationEl.innerHTML = "";
     return;
   }
 
-  // Split evenly across the two book-layout columns
-  const mid = Math.ceil(notes.length / 2);
-  typedLeftCol.innerHTML = buildTypedColHTML(groupNotes(notes.slice(0, mid)));
-  typedRightCol.innerHTML = buildTypedColHTML(groupNotes(notes.slice(mid)));
+  typedPaginationEl.style.display = "flex";
+  const makeBtn = (label, page, disabled = false, active = false) =>
+    `<button class="pg-btn${active ? " active" : ""}" data-page="${page}" ${disabled ? "disabled" : ""}>${label}</button>`;
+
+  let html = makeBtn("←", typedPage - 1, typedPage === 1);
+  const range = [];
+  if (pages <= 7) {
+    for (let i = 1; i <= pages; i++) range.push(i);
+  } else {
+    range.push(1);
+    if (typedPage > 3) range.push("…");
+    for (
+      let i = Math.max(2, typedPage - 1);
+      i <= Math.min(pages - 1, typedPage + 1);
+      i++
+    )
+      range.push(i);
+    if (typedPage < pages - 2) range.push("…");
+    range.push(pages);
+  }
+  for (const r of range) {
+    html +=
+      r === "…"
+        ? `<span class="pg-ellipsis">…</span>`
+        : makeBtn(r, r, false, r === typedPage);
+  }
+  html += makeBtn("→", typedPage + 1, typedPage === pages);
+  typedPaginationEl.innerHTML = html;
+
+  typedPaginationEl.querySelectorAll(".pg-btn:not([disabled])").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      typedPage = parseInt(btn.dataset.page);
+      renderTypedNotes();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+}
+
+function renderTypedNotes() {
+  if (!typedLeftCol || !typedRightCol) return;
+
+  renderTypedFilter();
+  const filtered = getFilteredTypedNotes();
+  const pages = Math.max(1, Math.ceil(filtered.length / TYPED_PER_PAGE));
+  if (typedPage > pages) typedPage = pages;
+
+  if (typedCountEl) {
+    typedCountEl.textContent = `${filtered.length} note${filtered.length !== 1 ? "s" : ""}`;
+  }
+
+  if (filtered.length === 0) {
+    const none = allTypedNotes.length === 0;
+    typedLeftCol.innerHTML = `
+      <div class="typed-empty-state">
+        <div class="big-icon">✎</div>
+        <h2>${none ? "No typed notes yet" : "No notes in this notebook"}</h2>
+        <p>${
+          none
+            ? "Switch to the <strong>Notepad</strong> tab and write your first note."
+            : "Pick another notebook from the dropdown, or choose <strong>All notebooks</strong>."
+        }</p>
+      </div>`;
+    typedRightCol.innerHTML = "";
+    renderTypedPagination(0);
+    return;
+  }
+
+  const pageNotes = filtered.slice(
+    (typedPage - 1) * TYPED_PER_PAGE,
+    typedPage * TYPED_PER_PAGE
+  );
+
+  // Split evenly across the two book-layout columns (5 + 5 for a full page)
+  const mid = Math.ceil(pageNotes.length / 2);
+  typedLeftCol.innerHTML = buildTypedColHTML(groupNotes(pageNotes.slice(0, mid)));
+  typedRightCol.innerHTML = buildTypedColHTML(groupNotes(pageNotes.slice(mid)));
 
   // ── Hide expand button when content doesn't overflow the cap ──
   document.querySelectorAll("#view-typed .md-content").forEach((el) => {
@@ -751,6 +1146,14 @@ function renderTypedNotes(notes) {
     });
   });
 
+  // ── Edit ──────────────────────────────────────────────────────
+  document.querySelectorAll("#view-typed .typed-note-edit").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const note = allTypedNotes.find((n) => n.id === parseInt(btn.dataset.id));
+      if (note) startEditingNote(note);
+    });
+  });
+
   // ── Delete ────────────────────────────────────────────────────
   document.querySelectorAll("#view-typed .typed-note-delete").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -761,12 +1164,14 @@ function renderTypedNotes(notes) {
       });
     });
   });
+
+  renderTypedPagination(filtered.length);
 }
 
 function loadTypedNotes() {
   chrome.runtime.sendMessage({ action: "getTypedNotes" }, (response) => {
     allTypedNotes = (response?.notes || []).slice().reverse();
-    renderTypedNotes(allTypedNotes);
+    renderTypedNotes();
     updateStorageIndicator();
   });
 }
@@ -776,7 +1181,8 @@ if (clearTypedBtn) {
     if (confirm("Delete all typed notes permanently?")) {
       chrome.runtime.sendMessage({ action: "clearTypedNotes" }, () => {
         allTypedNotes = [];
-        renderTypedNotes([]);
+        typedPage = 1;
+        renderTypedNotes();
         showToast("🗑 All typed notes cleared");
       });
     }
@@ -788,5 +1194,6 @@ if (clearTypedBtn) {
   const prefs = await loadPrefs();
   applyTheme(prefs.theme === "dark");
   applyLayout(prefs.layout !== "single"); // double unless explicitly "single"
+  await loadNotebooks();
   loadNotes();
 })();

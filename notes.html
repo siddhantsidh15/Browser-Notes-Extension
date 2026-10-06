@@ -1268,6 +1268,226 @@
         font-size: 14px;
         line-height: 1.7;
       }
+
+      /* ═══════════════════════════════════════════════════════════
+         NOTEBOOKS · EDIT · TYPED FILTER
+      ═══════════════════════════════════════════════════════════ */
+      [hidden] { display: none !important; }
+
+      .nb-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+        position: relative;
+        z-index: 20;
+        flex-wrap: wrap;
+      }
+
+      .nb-label {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+      }
+
+      .nb-dropdown { position: relative; }
+
+      .nb-trigger {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 260px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12.5px;
+        background: var(--surface);
+        border: 1.5px solid var(--rule);
+        color: var(--text);
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.25s;
+      }
+
+      .nb-trigger:hover,
+      .nb-dropdown.open .nb-trigger { border-color: var(--accent2); }
+
+      .nb-trigger-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .nb-trigger-label.placeholder { color: var(--text-muted); }
+      .nb-caret { font-size: 10px; color: var(--text-muted); }
+
+      .nb-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        width: 100%;
+        min-width: 260px;
+        max-height: 260px;
+        overflow-y: auto;
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        box-shadow: 0 10px 32px var(--shadow);
+        padding: 5px;
+        z-index: 60;
+      }
+
+      .nb-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        font-size: 13px;
+        color: var(--text);
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .nb-item:hover { background: var(--surface2); }
+      .nb-item.selected { color: var(--accent2); font-weight: 700; }
+      .nb-check { width: 12px; font-size: 11px; flex-shrink: 0; }
+      .nb-item-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .nb-item-name.muted { color: var(--text-muted); font-style: italic; font-weight: 400; }
+
+      .nb-rename-input {
+        flex: 1;
+        min-width: 0;
+        font: inherit;
+        font-size: 13px;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--accent2);
+        border-radius: 4px;
+        padding: 3px 7px;
+        outline: none;
+      }
+
+      .nb-add {
+        margin-top: 4px;
+        padding: 10px 10px 8px;
+        border-top: 1px solid var(--rule);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        color: var(--accent2);
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+        border-radius: 0 0 6px 6px;
+      }
+      .nb-add:hover { background: var(--surface2); }
+      .nb-menu > .nb-add:first-child { margin-top: 0; border-top: none; }
+
+      .nb-hint {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10.5px;
+        color: var(--text-muted);
+      }
+
+      .nb-edit-badge {
+        margin-left: auto;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--accent2);
+        border: 1px solid var(--accent2);
+        border-radius: 20px;
+        padding: 3px 12px;
+      }
+
+      .notepad-btns { display: flex; align-items: center; gap: 10px; }
+
+      .btn-ghost {
+        padding: 9px 20px;
+        border-radius: var(--radius);
+        border: 1px solid var(--rule);
+        background: transparent;
+        color: var(--text-muted);
+        font-family: "Lato", sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      .btn-ghost:hover { color: var(--text); border-color: var(--card-hover-border); }
+
+      .typed-header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+      .typed-count {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .typed-filter {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        max-width: 260px;
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        color: var(--text);
+        padding: 6px 10px;
+        border-radius: var(--radius);
+        outline: none;
+        cursor: pointer;
+        transition: border-color 0.15s;
+      }
+      .typed-filter:hover, .typed-filter:focus { border-color: var(--accent2); }
+
+      .nb-chip {
+        display: inline-block;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: bottom;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.3px;
+        color: var(--accent2);
+        border: 1px solid var(--accent2);
+        border-radius: 20px;
+        padding: 1px 9px;
+      }
+
+      /* Edit button: sits left of the delete ✕, hover-only */
+      .typed-note-edit {
+        position: absolute;
+        top: 10px;
+        right: 36px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--delete-color);
+        font-size: 14px;
+        line-height: 1;
+        padding: 3px 6px;
+        border-radius: 4px;
+        opacity: 0;
+        transition: opacity 0.15s, color 0.15s;
+      }
+      .note-card:hover .typed-note-edit,
+      .typed-note-edit:focus-visible { opacity: 1; }
+      .typed-note-edit:hover { color: var(--accent2); }
+
+      .md-content img.md-image {
+        display: block;
+        max-width: 100%;
+        border-radius: 6px;
+        margin: 6px 0;
+      }
     </style>
   </head>
   <body>
@@ -1364,6 +1584,24 @@
     <div class="view-panel" id="view-notepad">
       <div class="notepad-container">
         <h2 class="notepad-title">✎ Notepad</h2>
+        <div class="nb-bar">
+          <span class="nb-label">Notebook</span>
+          <div class="nb-dropdown" id="nbDropdown">
+            <button
+              type="button"
+              class="nb-trigger"
+              id="nbTrigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >
+              <span class="nb-trigger-label placeholder" id="nbTriggerLabel">No notebook</span>
+              <span class="nb-caret">▾</span>
+            </button>
+            <div class="nb-menu" id="nbMenu" role="listbox" hidden></div>
+          </div>
+          <span class="nb-hint">double-click a notebook to rename</span>
+          <span class="nb-edit-badge" id="editBadge" hidden>✎ Editing note</span>
+        </div>
         <div class="notepad-hint">
           <code># text</code> → small heading ·
           <code>## text</code> → medium heading ·
@@ -1377,7 +1615,10 @@
         ></textarea>
         <div class="notepad-actions">
           <span class="notepad-target" id="notepadTarget"></span>
-          <button class="btn-save-note" id="saveNoteBtn">Save note</button>
+          <div class="notepad-btns">
+            <button class="btn-ghost" id="cancelEditBtn" hidden>Cancel</button>
+            <button class="btn-save-note" id="saveNoteBtn">Save note</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1387,13 +1628,22 @@
       <div class="typed-container">
         <div class="typed-header">
           <span class="typed-title">📝 Typed Notes</span>
-          <button class="btn-clear-typed" id="clearTypedBtn">✕ Clear All Typed</button>
+          <div class="typed-header-right">
+            <span class="typed-count" id="typedCount"></span>
+            <select
+              id="typedFilter"
+              class="typed-filter"
+              title="Filter by notebook"
+            ></select>
+            <button class="btn-clear-typed" id="clearTypedBtn">✕ Clear All Typed</button>
+          </div>
         </div>
         <div class="typed-pages-wrap" id="typedPagesWrap">
           <div class="typed-page-col" id="typedLeftCol"></div>
           <div class="typed-page-col" id="typedRightCol"></div>
         </div>
       </div>
+      <div class="pagination" id="typedPagination" style="display: none"></div>
     </div>
 
     <div id="toast"></div>
