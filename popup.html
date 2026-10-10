@@ -1284,6 +1284,102 @@
         flex-wrap: wrap;
         gap: 8px;
       }
+
+      /* ── Typed tab: export button + format menu ── */
+      .typed-toolbar {
+        flex-wrap: wrap;
+      }
+
+      .typed-toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .export-wrap {
+        position: relative;
+      }
+
+      .export-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 5px 9px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          color 0.15s;
+      }
+
+      .export-btn:hover,
+      .export-btn[aria-expanded="true"] {
+        border-color: var(--accent-border);
+        color: var(--accent);
+      }
+
+      .export-btn:disabled {
+        opacity: 0.55;
+        cursor: progress;
+      }
+
+      .export-caret {
+        font-size: 9px;
+        opacity: 0.7;
+      }
+
+      .export-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        z-index: 50;
+        min-width: 150px;
+        display: flex;
+        flex-direction: column;
+        padding: 4px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      }
+
+      .export-menu[hidden] {
+        display: none;
+      }
+
+      .export-menu button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        text-align: left;
+        background: transparent;
+        border: none;
+        color: var(--text);
+        padding: 7px 9px;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      .export-menu button span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .export-menu button:hover,
+      .export-menu button:focus-visible {
+        background: var(--accent-dim);
+        color: var(--accent);
+        outline: none;
+      }
     </style>
   </head>
   <body>
@@ -1398,11 +1494,44 @@
     <div class="tab-panel" id="panel-typed">
       <div class="typed-toolbar">
         <span class="typed-count" id="typedCount"></span>
-        <select
-          id="typedFilter"
-          class="typed-filter"
-          title="Filter by notebook"
-        ></select>
+        <div class="typed-toolbar-right">
+          <div class="export-wrap">
+            <button
+              class="export-btn"
+              id="exportBtn"
+              title="Export the notes shown below"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 3v12" />
+                <path d="m7 10 5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
+              Export
+              <span class="export-caret">▾</span>
+            </button>
+            <div class="export-menu" id="exportMenu" hidden>
+              <button data-format="pdf">PDF <span>.pdf</span></button>
+              <button data-format="md">Markdown <span>.md</span></button>
+              <button data-format="txt">Plain text <span>.txt</span></button>
+            </div>
+          </div>
+          <select
+            id="typedFilter"
+            class="typed-filter"
+            title="Filter by notebook"
+          ></select>
+        </div>
       </div>
       <div id="typedNotesList" class="typed-list"></div>
       <div id="typedPagination" class="pagination" style="display: none"></div>
@@ -1420,6 +1549,7 @@
 
     <div id="toast"></div>
 
+    <script src="export.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

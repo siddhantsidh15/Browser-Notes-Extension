@@ -1338,6 +1338,126 @@ function renderTypedNotes() {
   renderTypedPagination(filtered.length);
 }
 
+// ── Export typed notes (PDF / Markdown / TXT) ────────────────────────────────
+// Exports whatever the notebook dropdown is currently showing (all pages).
+// The PDF is always rendered in a light theme, whatever theme the popup uses.
+const exportBtn = document.getElementById("exportBtn");
+const exportMenu = document.getElementById("exportMenu");
+
+function setExportMenu(open) {
+  exportMenu.hidden = !open;
+  exportBtn.setAttribute("aria-expanded", String(open));
+}
+
+exportBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  setExportMenu(exportMenu.hidden);
+});
+document.addEventListener("click", () => setExportMenu(false));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") setExportMenu(false);
+});
+exportMenu.querySelectorAll("button").forEach((b) =>
+  b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setExportMenu(false);
+    runExport(b.dataset.format);
+  })
+);
+
+// jsPDF (~400 KB) is only loaded the first time a PDF is requested
+let jsPdfPromise = null;
+function loadJsPdf() {
+  if (window.jspdf?.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+  if (!jsPdfPromise) {
+    jsPdfPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "lib/jspdf.umd.min.js";
+      s.onload = () => resolve(window.jspdf.jsPDF);
+      s.onerror = () => {
+        jsPdfPromise = null;
+        reject(new Error("Could not load lib/jspdf.umd.min.js"));
+      };
+      document.head.appendChild(s);
+    });
+  }
+  return jsPdfPromise;
+}
+
+// Re-encode pasted images on a white background so transparency can't turn black in the PDF
+function prepareImageForPdf(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0);
+      const small = c.width * c.height <= 2_000_000;
+      resolve({
+        dataUrl: small
+          ? c.toDataURL("image/png")
+          : c.toDataURL("image/jpeg", 0.88),
+        format: small ? "PNG" : "JPEG",
+        width: c.width,
+        height: c.height,
+      });
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+async function runExport(format) {
+  const filtered = getFilteredTypedNotes();
+  if (filtered.length === 0) {
+    showToast("No notes to export");
+    return;
+  }
+  const notebook =
+    typedFilter === "all"
+      ? null
+      : typedFilter === "none"
+        ? "No notebook"
+        : notebookName(typedFilter);
+  const notes = filtered.map((n) => ({
+    ...n,
+    notebook: notebookName(n.notebookId),
+  }));
+  const meta = { notebook };
+
+  exportBtn.disabled = true;
+  try {
+    let blob;
+    if (format === "pdf") {
+      showToast("Building PDF…", 5000);
+      const jsPDF = await loadJsPdf();
+      blob = await NoteExport.toPdf(notes, meta, {
+        jsPDF,
+        prepareImage: prepareImageForPdf,
+      });
+    } else if (format === "md") {
+      blob = new Blob([NoteExport.toMarkdown(notes, meta)], {
+        type: "text/markdown;charset=utf-8",
+      });
+    } else {
+      blob = new Blob([NoteExport.toText(notes, meta)], {
+        type: "text/plain;charset=utf-8",
+      });
+    }
+    NoteExport.download(blob, NoteExport.fileName(format, notebook));
+    showToast(`Exported ${notes.length} note${notes.length !== 1 ? "s" : ""}`);
+  } catch (err) {
+    console.error("Export failed:", err);
+    showToast("Export failed");
+  } finally {
+    exportBtn.disabled = false;
+  }
+}
+
 function loadTypedNotes() {
   chrome.runtime.sendMessage({ action: "getTypedNotes" }, (response) => {
     allTypedNotes = (response?.notes || []).slice().reverse();
