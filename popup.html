@@ -1380,6 +1380,114 @@
         color: var(--accent);
         outline: none;
       }
+
+      /* ── Notepad: snapshot button + image strip (shown while writing) ── */
+      .snap-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .snap-btn:disabled {
+        opacity: 0.55;
+        cursor: progress;
+      }
+
+      /* ── Notepad editor with inline images ── */
+      .notepad-textarea {
+        overflow-y: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        min-height: 120px;
+        cursor: text;
+      }
+
+      .notepad-textarea.is-empty::before {
+        content: attr(data-placeholder);
+        color: var(--muted);
+        pointer-events: none;
+      }
+
+      .img-chip {
+        position: relative;
+        display: inline-block;
+        vertical-align: middle;
+        margin: 2px 3px;
+        line-height: 0;
+        max-width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        cursor: zoom-in;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      .img-chip img {
+        display: block;
+        height: 60px;
+        width: auto;
+        max-width: 140px;
+        object-fit: cover;
+        border-radius: 5px;
+      }
+
+      .img-chip:hover {
+        border-color: var(--accent-border);
+      }
+
+      /* Double-click: a bit bigger; click anywhere else shrinks it again */
+      .img-chip.expanded {
+        display: block;
+        width: fit-content;
+        margin: 6px 0;
+        cursor: zoom-out;
+      }
+
+      .img-chip.expanded img {
+        height: auto;
+        max-height: 240px;
+        max-width: 100%;
+      }
+
+      .img-chip.missing img {
+        display: none;
+      }
+
+      .img-chip.missing::after {
+        content: "image unavailable";
+        display: block;
+        padding: 8px 10px;
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        line-height: 1.2;
+        color: var(--muted);
+      }
+
+      .img-del {
+        position: absolute;
+        top: 3px;
+        right: 3px;
+        width: 17px;
+        height: 17px;
+        line-height: 16px;
+        text-align: center;
+        font-size: 13px;
+        color: #fff;
+        background: rgba(20, 20, 30, 0.75);
+        border-radius: 50%;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+
+      .img-del::before {
+        content: "×";
+      }
+
+      .img-chip:hover .img-del {
+        opacity: 1;
+      }
     </style>
   </head>
   <body>
@@ -1443,15 +1551,20 @@
           <code># text</code> → small heading · <code>## text</code> → medium
           heading · <code>### text</code> → large heading ·
           <code>:text:</code> → underline · <code>[Code]…[Code]</code> → code
-          block · <code>&gt;C text &gt;C</code> → boxed · paste an image to
-          embed it · <code>( { [ &lt;</code> auto-close brackets · -x5 or -*5
+          block · <code>&gt;C text &gt;C</code> → boxed · paste an image or press
+          <code id="snapKeyHint">Ctrl+Shift+S</code> to snapshot the page
+          (double-click an image to enlarge) · <code>( { [ &lt;</code> auto-close brackets · -x5 or -*5
           equal -----
         </div>
-        <textarea
+        <div
           id="notepadTextarea"
-          class="notepad-textarea"
-          placeholder="Type your note here… paste an image, or wrap text in >C … >C for a box"
-        ></textarea>
+          class="notepad-textarea is-empty"
+          contenteditable="plaintext-only"
+          role="textbox"
+          aria-multiline="true"
+          spellcheck="true"
+          data-placeholder="Type your note here… paste an image or snapshot the page, or wrap text in >C … >C for a box"
+        ></div>
         <div class="notepad-preview-wrap">
           <div class="notepad-preview-label">Live preview</div>
           <div class="notepad-preview-box">
@@ -1484,6 +1597,12 @@
             > -->
           </div>
           <div class="notepad-btns">
+            <button class="btn-ghost snap-btn" id="snapshotBtn" title="Snapshot this page into the note">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
+              </svg>
+              Snapshot
+            </button>
             <button class="btn-ghost" id="cancelEditBtn" hidden>Cancel</button>
             <button class="btn-primary" id="saveNoteBtn">Save note</button>
           </div>
@@ -1503,19 +1622,8 @@
               aria-haspopup="true"
               aria-expanded="false"
             >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12 3v12" />
-                <path d="m7 10 5 5 5-5" />
-                <path d="M5 21h14" />
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
               </svg>
               Export
               <span class="export-caret">▾</span>
@@ -1549,6 +1657,7 @@
 
     <div id="toast"></div>
 
+    <script src="rich-editor.js"></script>
     <script src="export.js"></script>
     <script src="popup.js"></script>
   </body>

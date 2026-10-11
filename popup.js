@@ -43,6 +43,10 @@ let isCaseSensitive = false;
 let allTypedNotes = [];
 let activeTabInfo = null; // { url, title, domain } of the page focused when popup opened
 let draftImages = {}; // id -> base64 data URL, for images pasted into the notepad this session
+
+// The notepad is a contenteditable that shows [[img:…]] tokens as inline thumbnails
+// but behaves like a <textarea> (.value, .selectionStart, …) for everything below.
+RichEditor.attach(notepadTextarea, { getImage: (id) => draftImages[id] });
 const TYPED_PER_PAGE = 10;
 let typedPage = 1;
 let typedFilter = "all"; // "all" | "none" | <notebook id>
@@ -612,6 +616,7 @@ function renderNotepadTarget() {
 
 // ── Live preview ──────────────────────────────────────────────────────────────
 function updateNotepadPreview() {
+  notepadTextarea?.refreshImages?.(); // (re)attach image data to the inline thumbnails
   if (!notepadPreview) return;
   const text = notepadTextarea.value;
   if (!text.trim()) {
@@ -639,8 +644,18 @@ function saveDraft() {
   });
 }
 
+// Images live in their own key and are only written when they change
+// (they're far bigger than the text, which is saved on every keystroke).
+const DRAFT_IMAGES_KEY = "notepadDraftImages";
+
+function saveDraftImages() {
+  chrome.storage.local.set({
+    [DRAFT_IMAGES_KEY]: pruneImages(notepadTextarea.value, draftImages),
+  });
+}
+
 function clearDraft() {
-  chrome.storage.local.remove(DRAFT_KEY);
+  chrome.storage.local.remove([DRAFT_KEY, DRAFT_IMAGES_KEY]);
 }
 
 function loadDraft(callback) {
@@ -780,11 +795,54 @@ function insertAtCursor(el, text) {
   saveDraft();
 }
 
-// ── Paste an image from the clipboard into the note ───────────────────────────
-// The image is stored as a base64 data URL in `draftImages`, keyed by a short
-// id; only a compact [[img:<id>]] token is inserted into the text itself so
-// the textarea stays readable. Markdown.render() swaps the token back for an
-// <img> at display time.
+// ── Images: compression, paste, page snapshot ────────────────────────────────
+// Every image (pasted or snapshotted) is downscaled and re-encoded as a small
+// WebP before it is stored. Tweak these two numbers to trade quality for size.
+const IMG_MAX_DIM = 1000; // longest side in px; smaller images are never enlarged
+const IMG_QUALITY = 0.5; // WebP quality, 0–1
+
+function compressImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(
+        1,
+        IMG_MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight)
+      );
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d");
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, w, h);
+      let out = c.toDataURL("image/webp", IMG_QUALITY);
+      if (!out.startsWith("data:image/webp"))
+        out = c.toDataURL("image/jpeg", IMG_QUALITY);
+      // Tiny images (icons etc.) can come out bigger — keep the original then
+      resolve(scale === 1 && out.length >= src.length ? src : out);
+    };
+    img.onerror = () => reject(new Error("Could not decode image"));
+    img.src = src;
+  });
+}
+
+const kbOf = (dataUrl) =>
+  Math.max(1, Math.round((dataUrl.length * 0.75) / 1024));
+
+// Compress, store in draftImages, and drop a [[img:<id>]] token into the text.
+// The editor shows the token as an inline thumbnail.
+async function addImageToDraft(src, { label = "Image" } = {}) {
+  const compressed = await compressImage(src);
+  const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  draftImages[id] = compressed;
+  insertAtCursor(notepadTextarea, `[[img:${id}]]`); // exactly where the cursor is
+  saveDraftImages();
+  updateNotepadPreview();
+  showToast(`${label} added · ${kbOf(compressed)} KB`);
+}
+
 if (notepadTextarea) {
   notepadTextarea.addEventListener("paste", (e) => {
     const items = e.clipboardData?.items;
@@ -795,17 +853,77 @@ if (notepadTextarea) {
       if (!file) continue;
       e.preventDefault();
       const reader = new FileReader();
-      reader.onload = () => {
-        const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-        draftImages[id] = reader.result;
-        insertAtCursor(notepadTextarea, `[[img:${id}]]`);
-        updateNotepadPreview();
-      };
+      reader.onload = () =>
+        addImageToDraft(reader.result).catch(() =>
+          showToast("Couldn't add image")
+        );
       reader.readAsDataURL(file);
       break; // one image per paste
     }
   });
 }
+
+// ── Snapshot of the page you're on ────────────────────────────────────────────
+// Button, Cmd/Ctrl+Shift+S inside the popup/panel, and the global shortcut from
+// background.js (works while the page itself has focus) all end up here.
+const snapshotBtn = document.getElementById("snapshotBtn");
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+const SNAP_KEYS = isMac ? "⌘⇧S" : "Ctrl+Shift+S";
+let snapBusy = false;
+
+if (snapshotBtn) {
+  snapshotBtn.title = `Snapshot this page into the note (${SNAP_KEYS})`;
+  const hint = document.getElementById("snapKeyHint");
+  if (hint) hint.textContent = SNAP_KEYS;
+}
+
+async function takeSnapshot() {
+  if (snapBusy) return; // Chrome also rate-limits captureVisibleTab
+  snapBusy = true;
+  if (snapshotBtn) snapshotBtn.disabled = true;
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (!tab) throw new Error("No active tab");
+    const shot = await chrome.tabs.captureVisibleTab(tab.windowId, {
+      format: "jpeg",
+      quality: 90,
+    });
+    await addImageToDraft(shot, { label: "Snapshot" });
+  } catch (err) {
+    console.error("Snapshot failed:", err);
+    showToast("Can't snapshot this page");
+  } finally {
+    snapBusy = false;
+    if (snapshotBtn) snapshotBtn.disabled = false;
+  }
+}
+
+const notepadActive = () =>
+  document.getElementById("panel-notepad")?.classList.contains("active");
+
+if (snapshotBtn) snapshotBtn.addEventListener("click", takeSnapshot);
+
+document.addEventListener("keydown", (e) => {
+  if (
+    (e.metaKey || e.ctrlKey) &&
+    e.shiftKey &&
+    !e.altKey &&
+    e.code === "KeyS" &&
+    notepadActive()
+  ) {
+    e.preventDefault(); // also stops the browser-level command from firing twice
+    takeSnapshot();
+  }
+});
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.action !== "takeSnapshot") return;
+  if (!notepadActive()) switchTab("notepad");
+  takeSnapshot();
+});
 
 // Only keep images whose [[img:<id>]] token still appears in the given text —
 // drops anything the user pasted then deleted before saving.
@@ -1127,7 +1245,7 @@ function restoreEditState(editingId, notebookId) {
     const note = (res?.notes || []).find((n) => n.id === editingId);
     if (!note) return; // note was deleted — treat the draft as a new note
     editingNoteId = editingId;
-    draftImages = { ...(note.images || {}) };
+    draftImages = { ...(note.images || {}), ...draftImages };
     if (notebookId !== undefined) {
       setActiveNotebook(
         notebooks.some((n) => n.id === notebookId) ? notebookId : null,
@@ -1396,12 +1514,9 @@ function prepareImageForPdf(dataUrl) {
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, c.width, c.height);
       ctx.drawImage(img, 0, 0);
-      const small = c.width * c.height <= 2_000_000;
       resolve({
-        dataUrl: small
-          ? c.toDataURL("image/png")
-          : c.toDataURL("image/jpeg", 0.88),
-        format: small ? "PNG" : "JPEG",
+        dataUrl: c.toDataURL("image/jpeg", 0.85),
+        format: "JPEG",
         width: c.width,
         height: c.height,
       });
@@ -1477,7 +1592,9 @@ function loadTypedNotes() {
 
   // Restore unsaved draft and cursor position so state isn't lost when the popup closes
   if (notepadTextarea) {
-    loadDraft(({ text, start, end, editingId, notebookId }) => {
+    loadDraft(async ({ text, start, end, editingId, notebookId }) => {
+      const saved = await chrome.storage.local.get([DRAFT_IMAGES_KEY]);
+      draftImages = { ...(saved[DRAFT_IMAGES_KEY] || {}) };
       notepadTextarea.value = text;
       updateNotepadPreview();
       notepadTextarea.focus();

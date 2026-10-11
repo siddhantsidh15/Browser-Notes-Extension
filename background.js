@@ -30,9 +30,7 @@ async function applyDockMode() {
   if (!on) {
     const tabs = await chrome.tabs.query({});
     for (const t of tabs) {
-      chrome.sidePanel
-        .setOptions({ tabId: t.id, enabled: false })
-        .catch(() => {});
+      chrome.sidePanel.setOptions({ tabId: t.id, enabled: false }).catch(() => {});
     }
   }
 }
@@ -45,6 +43,14 @@ chrome.runtime.onStartup.addListener(applyDockMode);
 // Flip between popup <-> side panel as soon as the toggle changes
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes[DOCK_KEY]) applyDockMode();
+});
+
+// Global shortcut (works while the page has focus, e.g. with the docked panel open):
+// the open popup / side panel does the actual capture and inserts it into the note.
+chrome.commands.onCommand.addListener((command) => {
+  if (command === "take-snapshot") {
+    chrome.runtime.sendMessage({ action: "takeSnapshot" }).catch(() => {});
+  }
 });
 
 chrome.action.onClicked.addListener((tab) => {
@@ -83,6 +89,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     });
   }
 });
+
 
 function getDateKey(isoTimestamp) {
   const d = new Date(isoTimestamp);
