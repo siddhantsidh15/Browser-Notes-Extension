@@ -420,8 +420,8 @@ const NoteExport = (() => {
           if (!img) continue;
           let w = Math.min(CW, img.width * 0.75);
           let h = (img.height / img.width) * w;
-          if (h > 320) {
-            h = 320;
+          if (h > 560) {
+            h = 560;
             w = (img.width / img.height) * h;
           }
           ensure(h + 10);

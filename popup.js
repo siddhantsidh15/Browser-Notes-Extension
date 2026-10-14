@@ -801,13 +801,19 @@ function insertAtCursor(el, text) {
 const IMG_MAX_DIM = 1000; // longest side in px; smaller images are never enlarged
 const IMG_QUALITY = 0.5; // WebP quality, 0–1
 
-function compressImage(src) {
+// A second, sharper copy of every image is kept ONLY for exports (PDF / Markdown).
+// It lives under its own storage key ("hd:<id>"), so notes, lists and the editor
+// keep using the small copy and stay fast.
+const IMG_HD_MAX_DIM = 1920;
+const IMG_HD_QUALITY = 0.8;
+
+function encodeImage(src, maxDim, quality) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const scale = Math.min(
         1,
-        IMG_MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight)
+        maxDim / Math.max(img.naturalWidth, img.naturalHeight)
       );
       const w = Math.max(1, Math.round(img.naturalWidth * scale));
       const h = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -817,14 +823,46 @@ function compressImage(src) {
       const ctx = c.getContext("2d");
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, 0, 0, w, h);
-      let out = c.toDataURL("image/webp", IMG_QUALITY);
+      let out = c.toDataURL("image/webp", quality);
       if (!out.startsWith("data:image/webp"))
-        out = c.toDataURL("image/jpeg", IMG_QUALITY);
+        out = c.toDataURL("image/jpeg", quality);
       // Tiny images (icons etc.) can come out bigger — keep the original then
       resolve(scale === 1 && out.length >= src.length ? src : out);
     };
     img.onerror = () => reject(new Error("Could not decode image"));
     img.src = src;
+  });
+}
+
+// Stored one write at a time so the small "hdIndex" list never gets clobbered
+let hdQueue = Promise.resolve();
+function storeHdImage(id, dataUrl) {
+  hdQueue = hdQueue
+    .then(async () => {
+      const r = await chrome.storage.local.get(["hdIndex"]);
+      const index = r.hdIndex || [];
+      if (!index.includes(id)) index.push(id);
+      await chrome.storage.local.set({ ["hd:" + id]: dataUrl, hdIndex: index });
+    })
+    .catch((err) => console.error("Could not store export image:", err));
+  return hdQueue;
+}
+
+// Drop export copies whose image no longer appears in any note or the current draft.
+// Only ever called once the typed notes have actually loaded.
+async function sweepHdImages() {
+  const r = await chrome.storage.local.get(["hdIndex", DRAFT_IMAGES_KEY]);
+  const index = r.hdIndex || [];
+  if (!index.length) return;
+  const used = new Set(Object.keys(draftImages));
+  Object.keys(r[DRAFT_IMAGES_KEY] || {}).forEach((id) => used.add(id));
+  for (const n of allTypedNotes)
+    Object.keys(n.images || {}).forEach((id) => used.add(id));
+  const orphans = index.filter((id) => !used.has(id));
+  if (!orphans.length) return;
+  await chrome.storage.local.remove(orphans.map((id) => "hd:" + id));
+  await chrome.storage.local.set({
+    hdIndex: index.filter((id) => used.has(id)),
   });
 }
 
@@ -834,9 +872,13 @@ const kbOf = (dataUrl) =>
 // Compress, store in draftImages, and drop a [[img:<id>]] token into the text.
 // The editor shows the token as an inline thumbnail.
 async function addImageToDraft(src, { label = "Image" } = {}) {
-  const compressed = await compressImage(src);
+  const [compressed, hd] = await Promise.all([
+    encodeImage(src, IMG_MAX_DIM, IMG_QUALITY),
+    encodeImage(src, IMG_HD_MAX_DIM, IMG_HD_QUALITY),
+  ]);
   const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   draftImages[id] = compressed;
+  if (hd.length > compressed.length * 1.15) await storeHdImage(id, hd); // export copy
   insertAtCursor(notepadTextarea, `[[img:${id}]]`); // exactly where the cursor is
   saveDraftImages();
   updateNotepadPreview();
@@ -1515,7 +1557,7 @@ function prepareImageForPdf(dataUrl) {
       ctx.fillRect(0, 0, c.width, c.height);
       ctx.drawImage(img, 0, 0);
       resolve({
-        dataUrl: c.toDataURL("image/jpeg", 0.85),
+        dataUrl: c.toDataURL("image/jpeg", 0.92),
         format: "JPEG",
         width: c.width,
         height: c.height,
@@ -1523,6 +1565,22 @@ function prepareImageForPdf(dataUrl) {
     };
     img.onerror = () => resolve(null);
     img.src = dataUrl;
+  });
+}
+
+async function withExportImages(notes) {
+  const ids = new Set();
+  for (const n of notes) {
+    for (const m of (n.text || "").matchAll(/\[\[img:([\w-]+)\]\]/g))
+      ids.add(m[1]);
+  }
+  if (ids.size === 0) return notes;
+  const hd = await chrome.storage.local.get([...ids].map((id) => "hd:" + id));
+  return notes.map((n) => {
+    const images = { ...(n.images || {}) };
+    for (const id of Object.keys(images))
+      if (hd["hd:" + id]) images[id] = hd["hd:" + id];
+    return { ...n, images };
   });
 }
 
@@ -1538,14 +1596,14 @@ async function runExport(format) {
       : typedFilter === "none"
         ? "No notebook"
         : notebookName(typedFilter);
-  const notes = filtered.map((n) => ({
-    ...n,
-    notebook: notebookName(n.notebookId),
-  }));
   const meta = { notebook };
 
   exportBtn.disabled = true;
   try {
+    // Swap in the sharper export copy of each image where one exists
+    const notes = await withExportImages(
+      filtered.map((n) => ({ ...n, notebook: notebookName(n.notebookId) }))
+    );
     let blob;
     if (format === "pdf") {
       showToast("Building PDF…", 5000);
@@ -1578,6 +1636,7 @@ function loadTypedNotes() {
     allTypedNotes = (response?.notes || []).slice().reverse();
     renderTypedNotes();
     updateStorage();
+    if (Array.isArray(response?.notes)) sweepHdImages().catch(() => {});
   });
 }
 
