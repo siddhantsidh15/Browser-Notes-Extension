@@ -1632,7 +1632,158 @@ async function withExportImages(notes) {
   });
 }
 
+// ── JSON backup: export everything / import with strict validation ───────────
+// Unlike PDF / Markdown / text (which export the notebook shown in the dropdown),
+// the JSON backup always contains EVERYTHING: every notebook with its notes, the
+// notes that aren't in a notebook, and the saved selections from the first tab.
+async function exportJson() {
+  exportBtn.disabled = true;
+  try {
+    const stored = await chrome.storage.local.get([
+      "notebooks",
+      "typedNotes",
+      "notes",
+    ]);
+    const ids = new Set();
+    for (const n of stored.typedNotes || [])
+      for (const k of Object.keys(n?.images || {})) ids.add(k);
+    const hdRaw = ids.size
+      ? await chrome.storage.local.get([...ids].map((id) => "hd:" + id))
+      : {};
+    const hd = {};
+    for (const id of ids) if (hdRaw["hd:" + id]) hd[id] = hdRaw["hd:" + id];
+
+    const { file, skipped } = NotesBackup.buildExport(
+      { ...stored, hd },
+      chrome.runtime.getManifest().version
+    );
+    const check = NotesBackup.validate(file); // our own file must pass our own importer
+    if (!check.ok) {
+      console.error("Backup failed its own validation:", check.errors);
+      showToast("Backup failed — see console");
+      return;
+    }
+    const typed =
+      file.unfiledNotes.length +
+      file.notebooks.reduce((a, nb) => a + nb.notes.length, 0);
+    const blob = new Blob([JSON.stringify(file, null, 2)], {
+      type: "application/json",
+    });
+    NoteExport.download(
+      blob,
+      `save-to-notes-backup-${new Date().toISOString().slice(0, 10)}.json`
+    );
+    showToast(
+      `Backup saved · ${file.notebooks.length} notebooks, ${typed} notes, ${file.savedSelections.length} selections` +
+        (skipped ? ` (${skipped} unreadable skipped)` : ""),
+      3200
+    );
+  } catch (err) {
+    console.error("Backup failed:", err);
+    showToast("Backup failed");
+  } finally {
+    exportBtn.disabled = false;
+  }
+}
+
+const importBtn = document.getElementById("importBtn");
+const importFile = document.getElementById("importFile");
+importBtn.addEventListener("click", () => importFile.click());
+importFile.addEventListener("change", async () => {
+  const file = importFile.files[0];
+  importFile.value = ""; // so picking the same file again still fires
+  if (file) await importBackup(file);
+});
+
+function rejectImport(lines) {
+  alert("Import rejected — nothing was changed.\n\n" + lines.join("\n"));
+}
+
+async function importBackup(file) {
+  importBtn.disabled = true;
+  try {
+    if (file.size > NotesBackup.LIMITS.fileBytes)
+      return rejectImport(["The file is too large to be a backup."]);
+    let data;
+    try {
+      data = JSON.parse(await file.text());
+    } catch {
+      return rejectImport(["The file is not valid JSON."]);
+    }
+    const check = NotesBackup.validate(data);
+    if (!check.ok) {
+      return rejectImport([
+        "This is not a valid Save to Notes backup:",
+        ...check.errors.map((e) => "• " + e),
+      ]);
+    }
+
+    const existing = await chrome.storage.local.get([
+      "notebooks",
+      "typedNotes",
+      "notes",
+      "hdIndex",
+    ]);
+    const plan = NotesBackup.plan(data, existing);
+    const s = plan.summary;
+    if (s.typedNew + s.selectionsNew + s.notebooksNew === 0) {
+      showToast("Nothing new — everything in this file is already here", 3000);
+      return;
+    }
+
+    const lines = [];
+    if (s.notebooksNew || s.notebooksMerged) {
+      lines.push(
+        `• ${s.notebooksNew} new notebook${s.notebooksNew === 1 ? "" : "s"}` +
+          (s.notebooksMerged
+            ? ` (${s.notebooksMerged} matched an existing notebook)`
+            : "")
+      );
+    }
+    lines.push(
+      `• ${s.typedNew} new note${s.typedNew === 1 ? "" : "s"}` +
+        (s.typedSkipped ? ` (${s.typedSkipped} already here, skipped)` : ""),
+      `• ${s.selectionsNew} saved selection${s.selectionsNew === 1 ? "" : "s"} for the first tab` +
+        (s.selectionsSkipped
+          ? ` (${s.selectionsSkipped} already here, skipped)`
+          : "")
+    );
+    if (s.images) lines.push(`• ${s.images} image${s.images === 1 ? "" : "s"}`);
+    if (
+      !confirm(
+        `Import this backup?\n\n${lines.join("\n")}\n\nNothing is deleted — everything is added to what you already have.`
+      )
+    )
+      return;
+
+    const hdEntries = {};
+    for (const [id, url] of Object.entries(plan.hd))
+      hdEntries["hd:" + id] = url;
+    await chrome.storage.local.set({
+      notebooks: plan.notebooks,
+      typedNotes: plan.typedNotes,
+      notes: plan.notes,
+    });
+    if (Object.keys(hdEntries).length)
+      await chrome.storage.local.set({ ...hdEntries, hdIndex: plan.hdIndex });
+
+    await loadNotebooks();
+    loadNotes();
+    loadTypedNotes();
+    showToast(
+      `Imported ${s.typedNew} notes, ${s.selectionsNew} selections, ${s.notebooksNew} notebooks`,
+      3200
+    );
+  } catch (err) {
+    console.error("Import failed:", err);
+    alert("Import failed — nothing was changed.\n\n" + (err?.message || err));
+  } finally {
+    importBtn.disabled = false;
+  }
+}
+
 async function runExport(format) {
+  if (format === "json") return exportJson();
   const filtered = getFilteredTypedNotes();
   if (filtered.length === 0) {
     showToast("No notes to export");

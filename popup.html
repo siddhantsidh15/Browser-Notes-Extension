@@ -1369,6 +1369,12 @@
         cursor: pointer;
       }
 
+      .export-sep {
+        height: 1px;
+        margin: 4px 2px;
+        background: var(--border);
+      }
+
       .export-menu button span {
         color: var(--muted);
         font-size: 10px;
@@ -1614,6 +1620,17 @@
       <div class="typed-toolbar">
         <span class="typed-count" id="typedCount"></span>
         <div class="typed-toolbar-right">
+          <button
+            class="export-btn"
+            id="importBtn"
+            title="Import a JSON backup (adds to what you already have)"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 15V3" /><path d="m7 8 5-5 5 5" /><path d="M5 21h14" />
+            </svg>
+            Import
+          </button>
+          <input type="file" id="importFile" accept=".json,application/json" hidden />
           <div class="export-wrap">
             <button
               class="export-btn"
@@ -1632,6 +1649,13 @@
               <button data-format="pdf">PDF <span>.pdf</span></button>
               <button data-format="md">Markdown <span>.md</span></button>
               <button data-format="txt">Plain text <span>.txt</span></button>
+              <div class="export-sep"></div>
+              <button
+                data-format="json"
+                title="Everything: all notebooks, notes and the saved selections from the first tab"
+              >
+                JSON backup <span>.json</span>
+              </button>
             </div>
           </div>
           <select
@@ -1659,6 +1683,7 @@
 
     <script src="rich-editor.js"></script>
     <script src="export.js"></script>
+    <script src="backup.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
