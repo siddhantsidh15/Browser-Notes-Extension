@@ -156,6 +156,11 @@ const RichEditor = (() => {
       e = Math.min(Math.max(s, e), len);
       lastStart = s;
       lastEnd = e;
+      if (fixSel && !restoring && stack[idx]) {
+        stack[idx].start = s;
+        stack[idx].end = e;
+        fixSel = false;
+      }
       const [sc, so] = offsetToPoint(s);
       const [ec, eo] = offsetToPoint(e);
       const r = document.createRange();
@@ -177,6 +182,104 @@ const RichEditor = (() => {
         readSelection();
     });
 
+    // ── Undo / redo ──────────────────────────────────────────────────────────
+    // The browser's own undo can't cope with programmatic edits (auto-closed
+    // brackets, inserted images…), so the editor keeps its own history.
+    // Each entry is { value, start, end }. Quick runs of typing share one entry.
+    const MAX_HISTORY = 300;
+    let stack = [];
+    let idx = -1;
+    let restoring = false;
+    let fixSel = false; // next explicit selection belongs to the entry just pushed
+    let lastWasInput = false;
+    let lastInputType = "";
+    let lastInputTime = 0;
+
+    function snapshotState() {
+      const [start, end] = readSelection();
+      return { value: getValue(), start, end };
+    }
+
+    function resetHistory() {
+      stack = [snapshotState()];
+      idx = 0;
+      fixSel = false;
+      lastWasInput = false;
+    }
+
+    function pushState(coalesce) {
+      if (restoring) return;
+      const st = snapshotState();
+      const cur = stack[idx];
+      if (cur && cur.value === st.value) {
+        cur.start = st.start;
+        cur.end = st.end;
+        return;
+      }
+      stack.length = idx + 1; // typing after an undo discards the redo branch
+      if (coalesce && idx > 0) {
+        stack[idx] = st;
+      } else {
+        stack.push(st);
+        idx++;
+        if (stack.length > MAX_HISTORY) {
+          stack.shift();
+          idx--;
+        }
+      }
+    }
+
+    function applyState(st) {
+      restoring = true;
+      render(st.value);
+      writeSelection(st.start, st.end);
+      fixSel = false;
+      lastWasInput = false;
+      updateEmpty();
+      el.dispatchEvent(new Event("input", { bubbles: true })); // so the draft gets saved
+      restoring = false;
+    }
+
+    function undo() {
+      if (!restoring && getValue() !== stack[idx]?.value) pushState(false); // keep unrecorded edits redo-able
+      if (idx > 0) {
+        idx--;
+        applyState(stack[idx]);
+      }
+    }
+
+    function redo() {
+      if (idx < stack.length - 1) {
+        idx++;
+        applyState(stack[idx]);
+      }
+    }
+
+    el.addEventListener("keydown", (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.code === "KeyZ") {
+        e.preventDefault();
+        e.shiftKey ? redo() : undo();
+      } else if (e.code === "KeyY" && e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        redo();
+      }
+    });
+    // Edit-menu / context-menu Undo & Redo
+    el.addEventListener("beforeinput", (e) => {
+      if (e.inputType === "historyUndo") {
+        e.preventDefault();
+        undo();
+      } else if (e.inputType === "historyRedo") {
+        e.preventDefault();
+        redo();
+      }
+    });
+
+    el.resetHistory = resetHistory;
+    el.undo = undo;
+    el.redo = redo;
+
     // ── textarea-compatible API ──────────────────────────────────────────────
     Object.defineProperty(el, "value", {
       configurable: true,
@@ -186,6 +289,11 @@ const RichEditor = (() => {
         const end = getValue().length;
         lastStart = lastEnd = end;
         if (document.activeElement === el) writeSelection(end, end);
+        if (!restoring) {
+          pushState(false);
+          lastWasInput = false;
+          fixSel = true;
+        }
       },
     });
     Object.defineProperty(el, "selectionStart", {
@@ -258,8 +366,10 @@ const RichEditor = (() => {
     el.addEventListener("cut", copyHandler(true));
 
     // Typed / pasted tokens (e.g. pasting a copied image) turn into thumbnails
-    el.addEventListener("input", () => {
+    el.addEventListener("input", (ev) => {
       updateEmpty();
+      if (restoring) return; // undo/redo already rendered the exact state
+      fixSel = false;
       let textOnly = "";
       el.childNodes.forEach((n) => {
         if (n.nodeType === 3) textOnly += n.data;
@@ -269,9 +379,24 @@ const RichEditor = (() => {
         render(getValue());
         writeSelection(s, e);
       }
+      // Record for undo; consecutive typing / deleting merges into one step
+      const type = ev.inputType || "";
+      const now = Date.now();
+      const typing =
+        /^(insertText|deleteContentBackward|deleteContentForward)$/.test(type);
+      pushState(
+        typing &&
+          lastWasInput &&
+          type === lastInputType &&
+          now - lastInputTime < 800
+      );
+      lastWasInput = true;
+      lastInputType = type;
+      lastInputTime = now;
     });
 
     updateEmpty();
+    resetHistory();
   }
 
   return { attach };

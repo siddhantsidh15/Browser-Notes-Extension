@@ -696,6 +696,10 @@ if (notepadTextarea) {
 //  • Selecting text + typing opener  →  wraps the selection.
 //  • Typing a closer when it's already the next char  →  skip over (no double).
 const BRACKET_PAIRS = { "(": ")", "{": "}", "[": "]", "<": ">" };
+// Quotes close themselves too (" ' `). Skipped right after/before a letter or digit
+// so apostrophes (don't, it's) and closing quotes type normally.
+const QUOTE_CHARS = new Set(['"', "'", "`"]);
+const isWordChar = (c) => !!c && /[\p{L}\p{N}_]/u.test(c);
 const CLOSERS = new Set(Object.values(BRACKET_PAIRS));
 
 if (notepadTextarea) {
@@ -768,6 +772,47 @@ if (notepadTextarea) {
       saveDraft();
       updateNotepadPreview();
       return;
+    }
+
+    if (
+      QUOTE_CHARS.has(e.key) &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      !e.isComposing
+    ) {
+      const ta = notepadTextarea;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const val = ta.value;
+      const q = e.key;
+
+      if (start !== end) {
+        // Wrap the selected text in quotes
+        e.preventDefault();
+        ta.value =
+          val.slice(0, start) + q + val.slice(start, end) + q + val.slice(end);
+        ta.selectionStart = start + 1;
+        ta.selectionEnd = end + 1;
+        saveDraft();
+        updateNotepadPreview();
+        return;
+      }
+      if (val[start] === q) {
+        // Closing quote already there — type over it
+        e.preventDefault();
+        ta.selectionStart = ta.selectionEnd = start + 1;
+        return;
+      }
+      if (!isWordChar(val[start - 1]) && !isWordChar(val[start])) {
+        e.preventDefault();
+        ta.value = val.slice(0, start) + q + q + val.slice(start);
+        ta.selectionStart = ta.selectionEnd = start + 1;
+        saveDraft();
+        updateNotepadPreview();
+        return;
+      }
+      // otherwise (apostrophe / closing quote after a word): normal typing
     }
 
     if (CLOSERS.has(e.key)) {
@@ -1037,6 +1082,7 @@ if (saveNoteBtn) {
         saveNoteBtn.disabled = false;
         if (response?.success) {
           notepadTextarea.value = "";
+          notepadTextarea.resetHistory();
           draftImages = {};
           clearDraft();
           updateNotepadPreview();
@@ -1257,6 +1303,7 @@ function startEditingNote(note) {
   }
   editingNoteId = note.id;
   notepadTextarea.value = note.text;
+  notepadTextarea.resetHistory();
   draftImages = { ...(note.images || {}) };
   setActiveNotebook(
     notebooks.some((n) => n.id === note.notebookId) ? note.notebookId : null,
@@ -1273,6 +1320,7 @@ function startEditingNote(note) {
 function finishEditing() {
   editingNoteId = null;
   notepadTextarea.value = "";
+  notepadTextarea.resetHistory();
   draftImages = {};
   clearDraft();
   updateNotepadPreview();
@@ -1655,6 +1703,7 @@ function loadTypedNotes() {
       const saved = await chrome.storage.local.get([DRAFT_IMAGES_KEY]);
       draftImages = { ...(saved[DRAFT_IMAGES_KEY] || {}) };
       notepadTextarea.value = text;
+      notepadTextarea.resetHistory();
       updateNotepadPreview();
       notepadTextarea.focus();
       const validStart = Math.min(Math.max(0, start), text.length);
