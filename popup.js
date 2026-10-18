@@ -50,6 +50,7 @@ RichEditor.attach(notepadTextarea, { getImage: (id) => draftImages[id] });
 const TYPED_PER_PAGE = 10;
 let typedPage = 1;
 let typedFilter = "all"; // "all" | "none" | <notebook id>
+let refreshFindSoon = null; // set up with the notepad find bar below
 let notebooks = []; // [{ id, name }]
 let activeNotebookId = null; // notebook new notes are saved into
 let editingNoteId = null; // id of the typed note being edited, or null
@@ -617,6 +618,7 @@ function renderNotepadTarget() {
 // ── Live preview ──────────────────────────────────────────────────────────────
 function updateNotepadPreview() {
   notepadTextarea?.refreshImages?.(); // (re)attach image data to the inline thumbnails
+  if (refreshFindSoon) refreshFindSoon();
   if (!notepadPreview) return;
   const text = notepadTextarea.value;
   if (!text.trim()) {
@@ -1370,12 +1372,64 @@ function renderTypedFilter() {
   typedFilterEl.value = typedFilter;
 }
 
-function getFilteredTypedNotes() {
+// ── Typed tab search ──────────────────────────────────────────────────────────
+// Several words = all must match (anywhere in text / title / URL / notebook);
+// "quoted words" match as a phrase. Works together with the notebook dropdown.
+const typedSearchInput = document.getElementById("typedSearchInput");
+const typedCaseBtn = document.getElementById("typedCaseBtn");
+let typedCaseSensitive = false;
+
+const typedTerms = () =>
+  Search.parseQuery(typedSearchInput ? typedSearchInput.value : "");
+
+function notebookScopedTypedNotes() {
   if (typedFilter === "all") return allTypedNotes;
   if (typedFilter === "none") {
     return allTypedNotes.filter((n) => !notebookName(n.notebookId));
   }
   return allTypedNotes.filter((n) => n.notebookId === typedFilter);
+}
+
+// What's shown (and what PDF / Markdown / text export): notebook filter + search
+function getFilteredTypedNotes() {
+  const scoped = notebookScopedTypedNotes();
+  const terms = typedTerms();
+  if (!terms.length) return scoped;
+  return scoped.filter((n) =>
+    Search.noteMatches(n, terms, typedCaseSensitive, notebookName(n.notebookId))
+  );
+}
+
+function applyTypedHighlights() {
+  const terms = typedTerms();
+  if (!terms.length || !typedNotesList) {
+    Search.paint("typed-hit", []);
+    return;
+  }
+  const ranges = Search.rangesIn(
+    typedNotesList.querySelectorAll(".md-content, .domain-label"),
+    terms,
+    typedCaseSensitive
+  );
+  Search.paint("typed-hit", ranges);
+
+  // A collapsed card can hide its match below the fold — open those cards
+  typedNotesList.querySelectorAll(".md-content").forEach((el) => {
+    if (el.classList.contains("expanded")) return;
+    const first = ranges.find((r) => el.contains(r.startContainer));
+    if (!first) return;
+    if (
+      first.getBoundingClientRect().bottom >
+      el.getBoundingClientRect().bottom + 1
+    ) {
+      el.classList.add("expanded");
+      const btn = el.closest(".note-card")?.querySelector(".typed-expand-btn");
+      if (btn) {
+        btn.style.display = "";
+        btn.textContent = "Show less";
+      }
+    }
+  });
 }
 
 function renderTypedPagination(total) {
@@ -1417,6 +1471,11 @@ if (typedFilterEl) {
 }
 
 function renderTypedNotes() {
+  renderTypedNotesCore();
+  applyTypedHighlights();
+}
+
+function renderTypedNotesCore() {
   if (!typedNotesList) return;
 
   renderTypedFilter();
@@ -1425,7 +1484,9 @@ function renderTypedNotes() {
   if (typedPage > pages) typedPage = pages;
 
   if (typedCountEl) {
-    typedCountEl.textContent = `${filtered.length} note${filtered.length !== 1 ? "s" : ""}`;
+    typedCountEl.textContent = typedTerms().length
+      ? `${filtered.length} of ${notebookScopedTypedNotes().length} notes`
+      : `${filtered.length} note${filtered.length !== 1 ? "s" : ""}`;
   }
 
   if (filtered.length === 0) {
@@ -1435,7 +1496,9 @@ function renderTypedNotes() {
         <div class="empty-text">${
           allTypedNotes.length === 0
             ? "No typed notes yet."
-            : "No notes in this notebook."
+            : typedTerms().length
+              ? `No notes match “${esc(typedSearchInput.value.trim())}”.`
+              : "No notes in this notebook."
         }</div>
       </div>`;
     renderTypedPagination(0);
@@ -1782,6 +1845,176 @@ async function importBackup(file) {
     importBtn.disabled = false;
   }
 }
+
+// ── Typed tab search: events ──────────────────────────────────────────────────
+if (typedSearchInput) {
+  typedSearchInput.addEventListener(
+    "input",
+    debounce(() => {
+      typedPage = 1;
+      renderTypedNotes();
+    }, 200)
+  );
+  typedSearchInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (typedSearchInput.value) {
+      typedSearchInput.value = "";
+      typedPage = 1;
+      renderTypedNotes();
+    } else typedSearchInput.blur();
+  });
+  typedCaseBtn.addEventListener("click", () => {
+    typedCaseSensitive = !typedCaseSensitive;
+    typedCaseBtn.classList.toggle("active", typedCaseSensitive);
+    typedPage = 1;
+    renderTypedNotes();
+  });
+}
+
+// ── Notepad: find in the note you're writing ──────────────────────────────────
+// Cmd/Ctrl+F (or the magnifier button) opens a find bar above the editor. Every
+// match is highlighted; Enter / Shift+Enter step through them; Esc closes it and
+// leaves the current match selected in the editor.
+const findBar = document.getElementById("findBar");
+const findInput = document.getElementById("findInput");
+const findCount = document.getElementById("findCount");
+const findCaseBtn = document.getElementById("findCaseBtn");
+const findToggleBtn = document.getElementById("findToggleBtn");
+const notepadWrapEl = document.querySelector(".notepad-wrap");
+let findMatches = [];
+let findIdx = -1;
+let findCaseSensitive = false;
+
+function paintFind() {
+  const cur = findMatches[findIdx];
+  Search.paint(
+    "find-hit",
+    findMatches.filter((_, i) => i !== findIdx).map((m) => m.range)
+  );
+  Search.paint("find-current", cur ? [cur.range] : [], 1);
+  findCount.textContent = !findInput.value
+    ? ""
+    : findMatches.length
+      ? `${findIdx + 1}/${findMatches.length}`
+      : "No results";
+  findCount.classList.toggle(
+    "none",
+    !!findInput.value && findMatches.length === 0
+  );
+}
+
+// Scroll the editor only if the current match isn't comfortably in view
+function revealFindMatch() {
+  const m = findMatches[findIdx];
+  if (!m) return;
+  const el = notepadTextarea;
+  const r = m.range.getBoundingClientRect();
+  if (!r.height) return;
+  const lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
+  const top = el.getBoundingClientRect().top + el.clientTop;
+  if (r.top < top + lh || r.bottom > top + el.clientHeight - lh * 2) {
+    el.scrollTop += (r.top + r.bottom) / 2 - (top + el.clientHeight / 2);
+  }
+}
+
+function runFind({ keepCurrent = false, reveal = true } = {}) {
+  const q = findInput.value;
+  const prev = findMatches[findIdx];
+  findMatches = q ? notepadTextarea.findAll(q, findCaseSensitive) : [];
+  if (findMatches.length === 0) findIdx = -1;
+  else if (keepCurrent && prev) {
+    const i = findMatches.findIndex((m) => m.start >= prev.start);
+    findIdx = i === -1 ? findMatches.length - 1 : i;
+  } else {
+    const caret = notepadTextarea.selectionStart;
+    const i = findMatches.findIndex((m) => m.start >= caret);
+    findIdx = i === -1 ? 0 : i; // first match at/after the caret, wrapping to the top
+  }
+  paintFind();
+  if (reveal) revealFindMatch();
+}
+
+function stepFind(dir) {
+  if (!findMatches.length) return;
+  findIdx = (findIdx + dir + findMatches.length) % findMatches.length;
+  paintFind();
+  revealFindMatch();
+}
+
+function openFind() {
+  const ta = notepadTextarea;
+  const picked = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+  if (picked && picked.length <= 100 && !/\n|\[\[img:/.test(picked))
+    findInput.value = picked;
+  findBar.hidden = false;
+  notepadWrapEl.classList.add("finding");
+  findInput.focus();
+  findInput.select();
+  runFind();
+}
+
+function closeFind() {
+  const m = findMatches[findIdx];
+  findBar.hidden = true;
+  notepadWrapEl.classList.remove("finding");
+  Search.paint("find-hit", []);
+  Search.paint("find-current", []);
+  findMatches = [];
+  findIdx = -1;
+  notepadTextarea.focus();
+  if (m) notepadTextarea.setSelectionRange(m.start, m.end);
+  notepadTextarea.keepCaretVisible();
+}
+
+// Edits made while the bar is open refresh the highlights (without scrolling away)
+refreshFindSoon = debounce(() => {
+  if (!findBar.hidden) runFind({ keepCurrent: true, reveal: false });
+}, 120);
+
+findInput.addEventListener("input", () => runFind());
+findInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    stepFind(e.shiftKey ? -1 : 1);
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeFind();
+  }
+});
+document
+  .getElementById("findNextBtn")
+  .addEventListener("click", () => stepFind(1));
+document
+  .getElementById("findPrevBtn")
+  .addEventListener("click", () => stepFind(-1));
+document.getElementById("findCloseBtn").addEventListener("click", closeFind);
+findCaseBtn.addEventListener("click", () => {
+  findCaseSensitive = !findCaseSensitive;
+  findCaseBtn.classList.toggle("active", findCaseSensitive);
+  runFind();
+});
+findToggleBtn.addEventListener("click", () =>
+  findBar.hidden ? openFind() : closeFind()
+);
+
+// Cmd/Ctrl+F focuses the search that belongs to the tab you're on
+document.addEventListener("keydown", (e) => {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.code !== "KeyF")
+    return;
+  const active = document.querySelector(".tab-panel.active")?.id;
+  if (active === "panel-notepad") {
+    e.preventDefault();
+    openFind();
+  } else if (active === "panel-typed" && typedSearchInput) {
+    e.preventDefault();
+    typedSearchInput.focus();
+    typedSearchInput.select();
+  } else if (active === "panel-notes") {
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  }
+});
 
 async function runExport(format) {
   if (format === "json") return exportJson();

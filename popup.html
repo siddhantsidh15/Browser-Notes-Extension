@@ -1507,6 +1507,62 @@
       .img-chip:hover .img-del {
         opacity: 1;
       }
+
+      /* ── Search: Typed tab + notepad find bar ── */
+      #panel-typed > .search-wrap {
+        flex-shrink: 0;
+      }
+
+      .find-bar {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex-shrink: 0;
+      }
+
+      .find-bar[hidden] {
+        display: none;
+      }
+
+      .find-bar .search-icon {
+        left: 11px;
+      }
+
+      .find-bar input[type="text"] {
+        min-width: 0;
+        font-size: 12px;
+        padding: 6px 10px 6px 28px;
+      }
+
+      .find-count {
+        min-width: 46px;
+        text-align: right;
+        white-space: nowrap;
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+      }
+
+      .find-count.none {
+        color: #e06c75;
+      }
+
+      /* While the find bar is open the (fixed-height) popup editor gives up its height */
+      html:not(.is-panel) .notepad-wrap.finding .notepad-textarea {
+        height: 236px;
+      }
+
+      ::highlight(typed-hit),
+      ::highlight(find-hit) {
+        background-color: rgba(250, 204, 21, 0.55);
+        color: inherit;
+      }
+
+      ::highlight(find-current) {
+        background-color: rgba(251, 146, 60, 0.9);
+        color: inherit;
+      }
     </style>
   </head>
   <body>
@@ -1571,10 +1627,42 @@
           heading · <code>### text</code> → large heading ·
           <code>:text:</code> → underline · <code>[Code]…[Code]</code> → code
           block · <code>&gt;C text &gt;C</code> → boxed ·  -->
-          paste an image or press
-          <code id="snapKeyHint">Ctrl+Shift+S</code> to snapshot the page
-          (double-click an image to enlarge) ·
+          paste an image or press <code id="snapKeyHint">Ctrl+Shift+S</code> to
+          snapshot the page (double-click an image to enlarge) ·
           <code>( { [ &lt;</code> auto-close brackets · -x5 or -*5 equal -----
+        </div>
+        <div class="find-bar" id="findBar" hidden>
+          <span class="search-icon">⌕</span>
+          <input type="text" id="findInput" placeholder="Find in this note…" />
+          <span class="find-count" id="findCount"></span>
+          <button
+            class="search-action-btn"
+            id="findCaseBtn"
+            title="Match Case (Aa)"
+          >
+            Aa
+          </button>
+          <button
+            class="search-action-btn"
+            id="findPrevBtn"
+            title="Previous match (Shift+Enter)"
+          >
+            ↑
+          </button>
+          <button
+            class="search-action-btn"
+            id="findNextBtn"
+            title="Next match (Enter)"
+          >
+            ↓
+          </button>
+          <button
+            class="search-action-btn"
+            id="findCloseBtn"
+            title="Close (Esc)"
+          >
+            ✕
+          </button>
         </div>
         <div
           id="notepadTextarea"
@@ -1619,6 +1707,26 @@
           <div class="notepad-btns">
             <button
               class="btn-ghost snap-btn"
+              id="findToggleBtn"
+              title="Find in this note (⌘F / Ctrl+F)"
+              aria-label="Find in this note"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+            </button>
+            <button
+              class="btn-ghost snap-btn"
               id="snapshotBtn"
               title="Snapshot this page into the note"
             >
@@ -1647,6 +1755,23 @@
     </div>
 
     <div class="tab-panel" id="panel-typed">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input
+          type="text"
+          id="typedSearchInput"
+          placeholder="Search typed notes, titles, URLs…"
+        />
+        <div class="search-actions">
+          <button
+            class="search-action-btn"
+            id="typedCaseBtn"
+            title="Match Case (Aa)"
+          >
+            Aa
+          </button>
+        </div>
+      </div>
       <div class="typed-toolbar">
         <span class="typed-count" id="typedCount"></span>
         <div class="typed-toolbar-right">
@@ -1738,6 +1863,7 @@
 
     <div id="toast"></div>
 
+    <script src="search.js"></script>
     <script src="rich-editor.js"></script>
     <script src="export.js"></script>
     <script src="backup.js"></script>

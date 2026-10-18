@@ -315,7 +315,7 @@ const RichEditor = (() => {
     // Keep the caret a few lines above the bottom edge: once typing (or Enter /
     // arrow keys) gets close, the text scrolls up so the caret stays at the same
     // spot instead of crawling to the very bottom. Mouse clicks never scroll.
-    const MARGIN_LINES = 30; // blank lines to keep under the caret
+    const MARGIN_LINES = 5; // blank lines to keep under the caret
     let scrollRaf = 0;
 
     function caretRect() {
@@ -361,6 +361,69 @@ const RichEditor = (() => {
       scrollRaf = requestAnimationFrame(keepCaretVisible);
     };
     el.addEventListener("keyup", () => el.keepCaretVisible());
+
+    // ── Find (powers the notepad's search bar) ───────────────────────────────
+    // Returns [{ range, start, end }] for every match in the typed text (images are
+    // skipped). start/end are offsets into .value; each range is a live DOM range
+    // that can be handed to the highlighter.
+    el.findAll = (query, caseSensitive = false) => {
+      if (!query) return [];
+      const needle = caseSensitive ? query : query.toLowerCase();
+      const out = [];
+      let run = [];
+      let runBase = 0;
+      let acc = 0;
+
+      const locate = (nodes, idx) => {
+        let left = idx;
+        for (const n of nodes) {
+          if (left <= n.data.length) return [n, left];
+          left -= n.data.length;
+        }
+        const last = nodes[nodes.length - 1];
+        return [last, last.data.length];
+      };
+
+      const flush = () => {
+        if (run.length) {
+          const text = run.map((n) => n.data).join("");
+          const hay = caseSensitive ? text : text.toLowerCase();
+          if (hay.length === text.length) {
+            let i = 0;
+            while (out.length < 2000 && (i = hay.indexOf(needle, i)) !== -1) {
+              const [sn, so] = locate(run, i);
+              const [en, eo] = locate(run, i + needle.length);
+              const range = document.createRange();
+              range.setStart(sn, so);
+              range.setEnd(en, eo);
+              out.push({
+                range,
+                start: runBase + i,
+                end: runBase + i + needle.length,
+              });
+              i += needle.length;
+            }
+          }
+        }
+        run = [];
+      };
+
+      // Matches can't span an image, so search each stretch of text separately
+      for (const n of el.childNodes) {
+        if (n.nodeType === 3) {
+          if (!run.length) runBase = acc;
+          run.push(n);
+          acc += n.data.length;
+        } else {
+          flush();
+          acc += isChip(n)
+            ? tokenLen(n.dataset.id)
+            : serialize({ childNodes: [n] }).length;
+        }
+      }
+      flush();
+      return out;
+    };
 
     // ── Interaction ──────────────────────────────────────────────────────────
     const collapseAll = (except) =>
