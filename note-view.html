@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Note — Save to Notes</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&family=DM+Sans:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="note-view.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <button class="btn" id="backBtn" title="Back to your notes (Esc)">← Back to notes</button>
+      <div class="spacer"></div>
+
+      <div class="group" id="viewActions">
+        <button class="btn" id="copyBtn" title="Copy the note text">Copy</button>
+        <button class="btn primary" id="editBtn" title="Edit this note (E)">Edit</button>
+      </div>
+
+      <div class="group" id="editActions" hidden>
+        <span class="dirty" id="dirtyLabel"></span>
+        <button class="btn" id="cancelBtn">Cancel</button>
+        <button class="btn primary" id="saveBtn" title="Save (Cmd/Ctrl+S)">Save <kbd id="saveKeys">Ctrl+S</kbd></button>
+      </div>
+
+      <button class="btn" id="themeBtn" title="Toggle theme">☀</button>
+    </header>
+
+    <main class="sheet">
+      <div class="state" id="state" hidden>
+        <p id="stateText">Note not found. It may have been deleted.</p>
+        <button class="btn" id="stateBackBtn">← Back to notes</button>
+      </div>
+
+      <article id="article" hidden>
+        <h1 class="note-title"><a id="titleLink" target="_blank" rel="noopener"></a></h1>
+        <div class="note-sub" id="noteSub"></div>
+
+        <div class="reader md-content" id="reader"></div>
+        <div
+          class="editor"
+          id="editor"
+          contenteditable="plaintext-only"
+          role="textbox"
+          aria-multiline="true"
+          spellcheck="true"
+          data-placeholder="Write your note…"
+          hidden
+        ></div>
+        <div class="edit-hint" id="editHint" hidden>
+          Paste images straight in · double-click an image to enlarge ·
+          <code>( { [ " '</code> close themselves · <code>:text:</code> underline ·
+          <code>### text</code> heading
+        </div>
+
+        <div class="end-marker" id="endMarker">End of note</div>
+        <div class="stats" id="stats"></div>
+      </article>
+    </main>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="markdown.js"></script>
+    <script src="images.js"></script>
+    <script src="editor-kit.js"></script>
+    <script src="rich-editor.js"></script>
+    <script src="note-view.js"></script>
+  </body>
+</html>

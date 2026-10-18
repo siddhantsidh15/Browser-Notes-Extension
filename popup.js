@@ -47,6 +47,11 @@ let draftImages = {}; // id -> base64 data URL, for images pasted into the notep
 // The notepad is a contenteditable that shows [[img:…]] tokens as inline thumbnails
 // but behaves like a <textarea> (.value, .selectionStart, …) for everything below.
 RichEditor.attach(notepadTextarea, { getImage: (id) => draftImages[id] });
+// Auto-closing brackets/quotes, -*5 expansion, Tab indent (shared with the note viewer)
+EditorKeys.attach(notepadTextarea, () => {
+  saveDraft();
+  updateNotepadPreview();
+});
 const TYPED_PER_PAGE = 10;
 let typedPage = 1;
 let typedFilter = "all"; // "all" | "none" | <notebook id>
@@ -58,6 +63,8 @@ let editingNoteId = null; // id of the typed note being edited, or null
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 const COPY_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const DEL_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+
+const OPEN_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>`;
 
 const EDIT_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`;
 
@@ -78,83 +85,6 @@ async function savePrefs(patch) {
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
-function esc(str = "") {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-// ── Markdown (Notepad) ───────────────────────────────────────────────────────
-// Central place for typed-note formatting rules. Add new rules to the `rules`
-// array to extend supported syntax — each rule runs in order against
-// already-HTML-escaped text, so replacement strings may safely contain tags.
-const Markdown = {
-  rules: [
-    // Code block: [Code]...[Code] — case-insensitive, checked first so
-    // heading / underline rules don't fire inside a code block.
-    {
-      name: "codeBlock",
-      pattern: /\[code\]([\s\S]*?)\[code\]/gi,
-      render: (_match, code) =>
-        `<pre class="md-code"><code>${code}</code></pre>`,
-    },
-    // Pasted image placeholder: [[img:<id>]] — the actual base64 data lives
-    // in a separate `images` map (never inline in the text itself), passed
-    // in as the last argument by render() below.
-    {
-      name: "image",
-      pattern: /\[\[img:([\w-]+)\]\]/g,
-      render: (_match, id, _offset, _str, images) => {
-        const src = images && images[id];
-        if (!src) return "";
-        return `<img class="md-image" src="${src}" alt="pasted image" />`;
-      },
-    },
-    // >C text >C → boxed rectangle (the >C markers are omitted from output)
-    {
-      name: "box",
-      pattern: /&gt;C([\s\S]*?)&gt;C/g,
-      render: (_match, inner) => `<div class="md-box">${inner.trim()}</div>`,
-    },
-    // Headings — order matters: longest marker first so "### x" isn't
-    // partially matched by the "##" or "#" rule.
-    {
-      name: "h1",
-      pattern: /^###[ \t]+(.+)$/gm,
-      render: (_match, text) => `<h1>${text}</h1>`,
-    },
-    {
-      name: "h2",
-      pattern: /^##[ \t]+(.+)$/gm,
-      render: (_match, text) => `<h2>${text}</h2>`,
-    },
-    {
-      name: "h3",
-      pattern: /^#[ \t]+(.+)$/gm,
-      render: (_match, text) => `<h3>${text}</h3>`,
-    },
-    // :text: → underline
-    {
-      name: "underline",
-      pattern: /:([^:\n]+):/g,
-      render: (_match, text) => `<u>${text}</u>`,
-    },
-  ],
-
-  // Converts raw typed-note text into safe HTML. `images` maps
-  // [[img:<id>]] placeholders to their base64 data URLs.
-  render(rawText, images = {}) {
-    let html = esc(rawText || "");
-    for (const rule of this.rules) {
-      html = html.replace(rule.pattern, (...args) =>
-        rule.render(...args, images)
-      );
-    }
-    return html;
-  },
-};
 
 function faviconUrl(domain) {
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
@@ -692,208 +622,9 @@ if (notepadTextarea) {
   notepadTextarea.addEventListener("select", saveDraft);
 }
 
-// ── Auto-closing bracket pairs ────────────────────────────────────────────────
-// Works in the notepad textarea only. Behaviour:
-//  • Typing an opener  →  inserts pair, cursor lands between them.
-//  • Selecting text + typing opener  →  wraps the selection.
-//  • Typing a closer when it's already the next char  →  skip over (no double).
-const BRACKET_PAIRS = { "(": ")", "{": "}", "[": "]", "<": ">" };
-// Quotes close themselves too (" ' `). Skipped right after/before a letter or digit
-// so apostrophes (don't, it's) and closing quotes type normally.
-const QUOTE_CHARS = new Set(['"', "'", "`"]);
-const isWordChar = (c) => !!c && /[\p{L}\p{N}_]/u.test(c);
-const CLOSERS = new Set(Object.values(BRACKET_PAIRS));
-
-if (notepadTextarea) {
-  notepadTextarea.addEventListener("keydown", (e) => {
-    // Symbol repetition expansion (e.g. -*5 + Space/Enter expands to -----)
-    if (e.key === " " || e.key === "Enter") {
-      const ta = notepadTextarea;
-      if (ta.selectionStart === ta.selectionEnd) {
-        const pos = ta.selectionStart;
-        const textBefore = ta.value.slice(0, pos);
-        // Matches non-whitespace character before '*' followed by digits at the end of textBefore
-        const match =
-          textBefore.match(/(\S)\*(\d+)$/) || textBefore.match(/(\S)\x(\d+)$/);
-        if (match) {
-          e.preventDefault();
-          const symbol = match[1];
-          const count = parseInt(match[2], 10);
-          const repeatStr = symbol.repeat(count);
-          const startReplace = pos - match[0].length;
-          ta.value =
-            ta.value.slice(0, startReplace) + repeatStr + ta.value.slice(pos);
-          ta.selectionStart = ta.selectionEnd = startReplace + repeatStr.length;
-          saveDraft();
-          updateNotepadPreview();
-          return;
-        }
-      }
-    }
-
-    // Tab → insert indentation instead of moving focus
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const ta = notepadTextarea;
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const indent = "  "; // 2-space indentation
-      ta.value = ta.value.slice(0, start) + indent + ta.value.slice(end);
-      ta.selectionStart = ta.selectionEnd = start + indent.length;
-      saveDraft();
-      updateNotepadPreview();
-      return;
-    }
-
-    const closer = BRACKET_PAIRS[e.key];
-
-    if (closer) {
-      // Opening bracket pressed
-      e.preventDefault();
-      const ta = notepadTextarea;
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const val = ta.value;
-      const hasSelection = start !== end;
-
-      if (hasSelection) {
-        // Wrap the selected text
-        ta.value =
-          val.slice(0, start) +
-          e.key +
-          val.slice(start, end) +
-          closer +
-          val.slice(end);
-        ta.selectionStart = start + 1;
-        ta.selectionEnd = end + 1;
-      } else {
-        // Insert pair, park cursor in the middle
-        ta.value = val.slice(0, start) + e.key + closer + val.slice(start);
-        ta.selectionStart = ta.selectionEnd = start + 1;
-      }
-      saveDraft();
-      updateNotepadPreview();
-      return;
-    }
-
-    if (
-      QUOTE_CHARS.has(e.key) &&
-      !e.metaKey &&
-      !e.ctrlKey &&
-      !e.altKey &&
-      !e.isComposing
-    ) {
-      const ta = notepadTextarea;
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const val = ta.value;
-      const q = e.key;
-
-      if (start !== end) {
-        // Wrap the selected text in quotes
-        e.preventDefault();
-        ta.value =
-          val.slice(0, start) + q + val.slice(start, end) + q + val.slice(end);
-        ta.selectionStart = start + 1;
-        ta.selectionEnd = end + 1;
-        saveDraft();
-        updateNotepadPreview();
-        return;
-      }
-      if (val[start] === q) {
-        // Closing quote already there — type over it
-        e.preventDefault();
-        ta.selectionStart = ta.selectionEnd = start + 1;
-        return;
-      }
-      if (!isWordChar(val[start - 1]) && !isWordChar(val[start])) {
-        e.preventDefault();
-        ta.value = val.slice(0, start) + q + q + val.slice(start);
-        ta.selectionStart = ta.selectionEnd = start + 1;
-        saveDraft();
-        updateNotepadPreview();
-        return;
-      }
-      // otherwise (apostrophe / closing quote after a word): normal typing
-    }
-
-    if (CLOSERS.has(e.key)) {
-      // Closing bracket pressed — skip over if it's already the next char
-      const ta = notepadTextarea;
-      if (
-        ta.selectionStart === ta.selectionEnd &&
-        ta.value[ta.selectionStart] === e.key
-      ) {
-        e.preventDefault();
-        ta.selectionStart = ta.selectionEnd = ta.selectionStart + 1;
-      }
-    }
-  });
-}
-
-// ── Insert text at the current cursor position, replacing any selection ──────
-function insertAtCursor(el, text) {
-  const start = el.selectionStart ?? el.value.length;
-  const end = el.selectionEnd ?? el.value.length;
-  el.value = el.value.slice(0, start) + text + el.value.slice(end);
-  const pos = start + text.length;
-  el.selectionStart = el.selectionEnd = pos;
-  el.focus();
-  saveDraft();
-}
-
 // ── Images: compression, paste, page snapshot ────────────────────────────────
 // Every image (pasted or snapshotted) is downscaled and re-encoded as a small
 // WebP before it is stored. Tweak these two numbers to trade quality for size.
-const IMG_MAX_DIM = 1000; // longest side in px; smaller images are never enlarged
-const IMG_QUALITY = 0.5; // WebP quality, 0–1
-
-// A second, sharper copy of every image is kept ONLY for exports (PDF / Markdown).
-// It lives under its own storage key ("hd:<id>"), so notes, lists and the editor
-// keep using the small copy and stay fast.
-const IMG_HD_MAX_DIM = 1920;
-const IMG_HD_QUALITY = 0.8;
-
-function encodeImage(src, maxDim, quality) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(
-        1,
-        maxDim / Math.max(img.naturalWidth, img.naturalHeight)
-      );
-      const w = Math.max(1, Math.round(img.naturalWidth * scale));
-      const h = Math.max(1, Math.round(img.naturalHeight * scale));
-      const c = document.createElement("canvas");
-      c.width = w;
-      c.height = h;
-      const ctx = c.getContext("2d");
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, 0, 0, w, h);
-      let out = c.toDataURL("image/webp", quality);
-      if (!out.startsWith("data:image/webp"))
-        out = c.toDataURL("image/jpeg", quality);
-      // Tiny images (icons etc.) can come out bigger — keep the original then
-      resolve(scale === 1 && out.length >= src.length ? src : out);
-    };
-    img.onerror = () => reject(new Error("Could not decode image"));
-    img.src = src;
-  });
-}
-
-// Stored one write at a time so the small "hdIndex" list never gets clobbered
-let hdQueue = Promise.resolve();
-function storeHdImage(id, dataUrl) {
-  hdQueue = hdQueue
-    .then(async () => {
-      const r = await chrome.storage.local.get(["hdIndex"]);
-      const index = r.hdIndex || [];
-      if (!index.includes(id)) index.push(id);
-      await chrome.storage.local.set({ ["hd:" + id]: dataUrl, hdIndex: index });
-    })
-    .catch((err) => console.error("Could not store export image:", err));
-  return hdQueue;
-}
 
 // Drop export copies whose image no longer appears in any note or the current draft.
 // Only ever called once the typed notes have actually loaded.
@@ -913,9 +644,6 @@ async function sweepHdImages() {
   });
 }
 
-const kbOf = (dataUrl) =>
-  Math.max(1, Math.round((dataUrl.length * 0.75) / 1024));
-
 // Compress, store in draftImages, and drop a [[img:<id>]] token into the text.
 // The editor shows the token as an inline thumbnail.
 async function addImageToDraft(src, { label = "Image" } = {}) {
@@ -926,7 +654,7 @@ async function addImageToDraft(src, { label = "Image" } = {}) {
   const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   draftImages[id] = compressed;
   if (hd.length > compressed.length * 1.15) await storeHdImage(id, hd); // export copy
-  insertAtCursor(notepadTextarea, `[[img:${id}]]`); // exactly where the cursor is
+  insertAtCursor(notepadTextarea, `[[img:${id}]]`, saveDraft); // exactly where the cursor is
   notepadTextarea.keepCaretVisible();
   saveDraftImages();
   updateNotepadPreview();
@@ -1014,18 +742,6 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (!notepadActive()) switchTab("notepad");
   takeSnapshot();
 });
-
-// Only keep images whose [[img:<id>]] token still appears in the given text —
-// drops anything the user pasted then deleted before saving.
-function pruneImages(text, images) {
-  const used = {};
-  const re = /\[\[img:([\w-]+)\]\]/g;
-  let m;
-  while ((m = re.exec(text))) {
-    if (images[m[1]]) used[m[1]] = images[m[1]];
-  }
-  return used;
-}
 
 if (saveNoteBtn) {
   saveNoteBtn.addEventListener("click", async () => {
@@ -1470,6 +1186,20 @@ if (typedFilterEl) {
   });
 }
 
+// Opens the full-page reader/editor (note-view.html) in a new tab beside this one.
+// `from` lets its Back button return to the tab you were on.
+async function openNoteInTab(id) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const url = chrome.runtime.getURL(
+    `note-view.html?id=${id}${tab ? `&from=${tab.id}` : ""}`
+  );
+  chrome.tabs.create({
+    url,
+    index: tab ? tab.index + 1 : undefined,
+    active: true,
+  });
+}
+
 function renderTypedNotes() {
   renderTypedNotesCore();
   applyTypedHighlights();
@@ -1541,6 +1271,7 @@ function renderTypedNotesCore() {
             <button class="typed-expand-btn" title="Expand / collapse">Show more</button>
             <button class="typed-copy-btn" data-id="${note.id}" title="Copy note text">${COPY_SVG}</button>
             <button class="typed-copy-btn typed-edit-btn" data-id="${note.id}" title="Edit note">${EDIT_SVG}</button>
+            <button class="typed-copy-btn typed-open-btn" data-id="${note.id}" title="Open in a full tab — read it all and edit">${OPEN_SVG}</button>
             <button class="card-btn del typed-delete-btn" data-id="${note.id}" title="Delete" style="margin-left:auto;">${DEL_SVG}</button>
           </div>
         </div>`;
@@ -1571,7 +1302,9 @@ function renderTypedNotesCore() {
 
   // ── Copy ──
   typedNotesList
-    .querySelectorAll(".typed-copy-btn:not(.typed-edit-btn)")
+    .querySelectorAll(
+      ".typed-copy-btn:not(.typed-edit-btn):not(.typed-open-btn)"
+    )
     .forEach((btn) => {
       btn.addEventListener("click", () => {
         const mdEl = btn.closest(".note-card")?.querySelector(".md-content");
@@ -1589,6 +1322,12 @@ function renderTypedNotesCore() {
     });
 
   // ── Edit ──
+  typedNotesList.querySelectorAll(".typed-open-btn").forEach((btn) => {
+    btn.addEventListener("click", () =>
+      openNoteInTab(parseInt(btn.dataset.id))
+    );
+  });
+
   typedNotesList.querySelectorAll(".typed-edit-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const note = allTypedNotes.find((n) => n.id === parseInt(btn.dataset.id));
@@ -2077,6 +1816,19 @@ function loadTypedNotes() {
 (async () => {
   const prefs = await loadPrefs();
   applyTheme(prefs.theme !== "light");
+
+  // Coming back from the full-page note viewer: reopen on the tab you left from
+  const start = (await chrome.storage.local.get(["popupStartTab"]))
+    .popupStartTab;
+  if (start) {
+    chrome.storage.local.remove("popupStartTab");
+    if (
+      Date.now() - start.ts < 15000 &&
+      ["notes", "notepad", "typed"].includes(start.tab)
+    ) {
+      switchTab(start.tab);
+    }
+  }
   loadNotes();
   await loadNotebooks();
   activeTabInfo = await detectActiveTab();
