@@ -1408,6 +1408,19 @@
         cursor: text;
       }
 
+      /* Dropdown popup: a fixed-height box that scrolls inside itself (a plain
+         flex child would grow with the text and push the popup taller instead).
+         The docked panel already has a bounded height, so it fills the space. */
+      html:not(.is-panel) .notepad-textarea {
+        flex: none;
+        height: 280px;
+      }
+
+      /* Room under the last line so the text can scroll up past the caret */
+      .notepad-textarea {
+        padding-bottom: min(110px, 22vh);
+      }
+
       .notepad-textarea.is-empty::before {
         content: attr(data-placeholder);
         color: var(--muted);
@@ -1554,13 +1567,14 @@
     <div class="tab-panel active" id="panel-notepad">
       <div class="notepad-wrap">
         <div class="notepad-hint">
-          <code># text</code> → small heading · <code>## text</code> → medium
+          <!-- <code># text</code> → small heading · <code>## text</code> → medium
           heading · <code>### text</code> → large heading ·
           <code>:text:</code> → underline · <code>[Code]…[Code]</code> → code
-          block · <code>&gt;C text &gt;C</code> → boxed · paste an image or press
+          block · <code>&gt;C text &gt;C</code> → boxed ·  -->
+          paste an image or press
           <code id="snapKeyHint">Ctrl+Shift+S</code> to snapshot the page
-          (double-click an image to enlarge) · <code>( { [ &lt;</code> auto-close brackets · -x5 or -*5
-          equal -----
+          (double-click an image to enlarge) ·
+          <code>( { [ &lt;</code> auto-close brackets · -x5 or -*5 equal -----
         </div>
         <div
           id="notepadTextarea"
@@ -1603,9 +1617,25 @@
             > -->
           </div>
           <div class="notepad-btns">
-            <button class="btn-ghost snap-btn" id="snapshotBtn" title="Snapshot this page into the note">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
+            <button
+              class="btn-ghost snap-btn"
+              id="snapshotBtn"
+              title="Snapshot this page into the note"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                />
+                <circle cx="12" cy="13" r="4" />
               </svg>
               Snapshot
             </button>
@@ -1625,12 +1655,28 @@
             id="importBtn"
             title="Import a JSON backup (adds to what you already have)"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 15V3" /><path d="m7 8 5-5 5 5" /><path d="M5 21h14" />
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 15V3" />
+              <path d="m7 8 5-5 5 5" />
+              <path d="M5 21h14" />
             </svg>
             Import
           </button>
-          <input type="file" id="importFile" accept=".json,application/json" hidden />
+          <input
+            type="file"
+            id="importFile"
+            accept=".json,application/json"
+            hidden
+          />
           <div class="export-wrap">
             <button
               class="export-btn"
@@ -1639,8 +1685,19 @@
               aria-haspopup="true"
               aria-expanded="false"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 3v12" />
+                <path d="m7 10 5 5 5-5" />
+                <path d="M5 21h14" />
               </svg>
               Export
               <span class="export-caret">▾</span>

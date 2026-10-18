@@ -925,6 +925,7 @@ async function addImageToDraft(src, { label = "Image" } = {}) {
   draftImages[id] = compressed;
   if (hd.length > compressed.length * 1.15) await storeHdImage(id, hd); // export copy
   insertAtCursor(notepadTextarea, `[[img:${id}]]`); // exactly where the cursor is
+  notepadTextarea.keepCaretVisible();
   saveDraftImages();
   updateNotepadPreview();
   showToast(`${label} added · ${kbOf(compressed)} KB`);

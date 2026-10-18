@@ -311,6 +311,57 @@ const RichEditor = (() => {
     // Re-apply image data after the id -> dataURL map changed
     el.refreshImages = () => el.querySelectorAll(".img-chip").forEach(syncChip);
 
+    // ── Typewriter scrolling ─────────────────────────────────────────────────
+    // Keep the caret a few lines above the bottom edge: once typing (or Enter /
+    // arrow keys) gets close, the text scrolls up so the caret stays at the same
+    // spot instead of crawling to the very bottom. Mouse clicks never scroll.
+    const MARGIN_LINES = 30; // blank lines to keep under the caret
+    let scrollRaf = 0;
+
+    function caretRect() {
+      const sel = window.getSelection();
+      if (!sel.rangeCount || !el.contains(sel.focusNode)) return null;
+      const range = sel.getRangeAt(0).cloneRange();
+      range.collapse(false);
+      const rects = range.getClientRects();
+      const r = rects.length
+        ? rects[rects.length - 1]
+        : range.getBoundingClientRect();
+      if (r.height > 0) return r;
+      // Empty line (e.g. right after Enter): browsers report nothing, so measure
+      // an invisible marker placed at the caret, then put everything back.
+      const [s0, e0] = readSelection();
+      const mark = document.createElement("span");
+      mark.textContent = "\u200b";
+      range.insertNode(mark);
+      const m = mark.getBoundingClientRect();
+      const out = { top: m.top, bottom: m.bottom, height: m.height };
+      mark.remove();
+      el.normalize();
+      writeSelection(s0, e0);
+      return out.height > 0 ? out : null;
+    }
+
+    function keepCaretVisible() {
+      if (document.activeElement !== el) return;
+      const r = caretRect();
+      if (!r) return;
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
+      const top = el.getBoundingClientRect().top + el.clientTop;
+      const margin = Math.min(MARGIN_LINES * lh, el.clientHeight * 0.4);
+      const bottomLimit = top + el.clientHeight - margin;
+      const topLimit = top + Math.min(2 * lh, el.clientHeight * 0.2);
+      if (r.bottom > bottomLimit) el.scrollTop += r.bottom - bottomLimit;
+      else if (r.top < topLimit) el.scrollTop -= topLimit - r.top;
+    }
+
+    // Wait for layout, then adjust (one adjustment per frame at most)
+    el.keepCaretVisible = () => {
+      cancelAnimationFrame(scrollRaf);
+      scrollRaf = requestAnimationFrame(keepCaretVisible);
+    };
+    el.addEventListener("keyup", () => el.keepCaretVisible());
+
     // ── Interaction ──────────────────────────────────────────────────────────
     const collapseAll = (except) =>
       el.querySelectorAll(".img-chip.expanded").forEach((c) => {
@@ -368,6 +419,7 @@ const RichEditor = (() => {
     // Typed / pasted tokens (e.g. pasting a copied image) turn into thumbnails
     el.addEventListener("input", (ev) => {
       updateEmpty();
+      el.keepCaretVisible();
       if (restoring) return; // undo/redo already rendered the exact state
       fixSel = false;
       let textOnly = "";
